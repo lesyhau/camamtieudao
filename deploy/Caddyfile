@@ -1,0 +1,29 @@
+# Used under the `tls` profile only - a host with no reverse proxy of its own. Caddy obtains
+# and renews Let's Encrypt certificates over HTTP-01, which needs :80 and :443 reachable from
+# the internet and APP_HOST resolving here.
+#
+# vm0/vm1 do NOT use this profile: their nginx owns :443 and forwards to the loopback port.
+#
+# Behind Cloudflare, records may stay PROXIED as long as SSL/TLS mode is Full (strict).
+# If issuance fails while proxied, set the record to DNS-only, let Caddy get the certificate,
+# then turn the proxy back on.
+
+{
+	email {$ACME_EMAIL}
+}
+
+{$APP_HOST} {
+	encode zstd gzip
+
+	# Same Docker network, so this reaches the container directly rather than going back out
+	# through the published loopback port.
+	reverse_proxy app:4249
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}

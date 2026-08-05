@@ -1,0 +1,44 @@
+name: CI
+
+# Typecheck, test, build. Nothing else - deploy.yml handles main and dev.
+#
+# `dev` is deliberately absent from the push triggers even though deploy.yml runs on it:
+# deploy.yml does the same three steps before shipping, so listing dev here would run every
+# merge twice. Pull requests are where this workflow earns its keep.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # 22.18+: the extraction core and its tests are plain .ts run through Node's own
+          # type stripping, with no bundler and no ts-node. Older minors need an explicit
+          # --experimental-strip-types and 20 cannot do it at all.
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # The M1 acceptance suite: the 叹云兮 ground truth converts end to end with no image and
+      # no model involved, so a failure here is always the converter, never the extractor.
+      - name: Test
+        run: npm test
+
+      - run: npm run build
+
+      - name: Verify the standalone server was emitted
+        run: test -f .next/standalone/server.js

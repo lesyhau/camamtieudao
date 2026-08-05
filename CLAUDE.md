@@ -1,0 +1,136 @@
+# CLAUDE.md
+
+Guidance for Claude Code working in this repository.
+
+## What this is
+
+**Cảm Âm Tiêu Dao** reads a jianpu (简谱, Chinese numbered notation) sheet from an image and
+converts it to Vietnamese cảm âm. One thing, done well: a chat interface with an attach
+button, Google sign-in, and nothing else. No settings page - the model is configured entirely
+by environment variables.
+
+Deliberately **not** in scope: history, folders, sharing, document search, multiple providers,
+a settings UI. Every one of those is a reason this stops being simple.
+
+Related work, not dependencies:
+- `../../jianpu_workspace/jpeditor` - a jianpu editor with a local OMR pipeline (`src/omr/`).
+  Its `RecognizedScore` is the same shape of data this repo's extractor produces, and its
+  `.jpwabc` writer is where the fixture came from. That pipeline is browser-welded
+  (`OffscreenCanvas`, `onnxruntime-web`) and cannot produce repeats, voltas, tuplets or
+  accidentals - which is why extraction here is a vision model, not a port of it.
+- `../../proxyma_workspace` - the deployment conventions below are copied from it verbatim.
+
+## The pitch model - read this before touching `src/lib/camam/`
+
+Four ordered stages. **Stages 3-4 need the whole song, so conversion is two-pass by
+construction.** A per-note pure function cannot produce a cảm âm name.
+
+1. **Absolute position.** `p = 7 × octave + (digit − 1)`, octave ∈ [−2, +2], so `1,,`…`7''`.
+   This is all the extractor produces. `p` is stored in the output so a renderer can derive a
+   third anchor without re-extracting.
+
+2. **Anchor.** `q = p − (s − 1)` where `s` is the degree called `do`; `ring = q mod 7`,
+   `band = ⌊q / 7⌋`. Two anchors ship, both in `ANCHORS`:
+
+   | jianpu | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
+   |---|---|---|---|---|---|---|---|
+   | `5 → do` (mixolydian) | fa | sol | la | **sib** | do | re | mi |
+   | `2 → do` (dorian) | **sib** | do | re | **mib** | fa | sol | la |
+
+   The flats are not optional and not a bug. Relabelling a major scale from a non-tonic degree
+   produces a mode; anchoring at 5 means the flute is a fourth away and its leading tone is a
+   semitone high. Accidental mode is **always strict**.
+
+   A **printed** accidental from the sheet *adds* to the modal alteration rather than replacing
+   it, so `#4` under `5 → do` correctly cancels `sib` back to a natural `si`. Overriding
+   instead would emit `si#`. There is a test for exactly this.
+
+3. **Normalize.** Shift every band by `−min(band)` over non-rest notes, computed
+   **independently per anchor**. This is what guarantees no `do,` / `do,,` ever reaches the
+   output - the low octave is expressed by moving the whole song, not by a suffix.
+
+4. **Case.** band 0 lowercase, 1 Capitalized, 2 UPPERCASE, ≥3 UPPERCASE + `'` and a warning.
+   The case transform applies to the whole token including the accidental: `sib`/`Sib`/`SIB`.
+
+**Consequence for the UI:** a low note near the end changes the case of every note before it,
+so cảm âm cannot be streamed. Extract fully, then render once.
+
+Note lengths: `length = (1/2^u) × (1 + Σ 2^−k for k=1..d) + n`, with `u` underscores, `d` dots,
+`n` dashes, in units of `x` = the un-underlined note = one quarter. Emitted as an exact
+reduced fraction *and* a float; do not drop the fraction.
+
+## Ground truth
+
+`fixtures/tan-van-xi.jpwabc` is 叹云兮 (JP-Word4, 桃李醉春风 记谱) - 419 notes, 51 measures,
+12 lines, 2 verses. `npm test` converts it end to end with **no image and no model involved**,
+so a failure there is always the converter, never the extractor. Keep that property.
+
+Two things known about this fixture:
+
+- **`5 → do` needs 4 bands on this song; `2 → do` needs 3.** Not a defect in either - the song
+  covers ~2.6 octaves and anchoring at 5 straddles four band boundaries where anchoring at 2
+  straddles three. Restricting to sung notes does not change it. Band occupancy:
+  `5→do` = 7/280/105/4, `2→do` = 164/217/15.
+- **The ground truth has no accidentals.** The sheet prints `2#11` and `1#55`; the `.jpwabc`
+  contains zero `#` tokens. When scoring extractor output against it, a correctly-read `#`
+  registers as a false positive. Patch the fixture or exclude accidentals from the metric -
+  do not discover this while debugging a score.
+
+`.Words` is **character-addressed, not slash-delimited**: each CJK character consumes one note,
+`/` consumes a note with no lyric (melisma), trailing punctuation glues onto the previous
+syllable without consuming a note, and a trailing `“` migrates to the next. Splitting on `/`
+looks plausible and silently mis-aligns every verse. Mirrors `WordsSection.parse` in
+jpeditor's `src/jpword/jpwfile.ts`.
+
+## Commands
+
+```bash
+npm run dev          # Next dev server
+npm run build        # production build -> .next/standalone
+npm run typecheck    # tsc --noEmit
+npm test             # node --test, the M1 unit + acceptance suites
+```
+
+Node **22.18+**. `src/lib/camam/` is plain `.ts` run through Node's own type stripping - no
+bundler, no ts-node - so relative imports there carry explicit `.ts` extensions and the code
+must stay erasable (`erasableSyntaxOnly` is on). No enums, no parameter properties.
+
+## Branching and deployment
+
+Identical to the Proxyma workspace, and for the same reasons.
+
+```
+main   production - only ever updated by merging dev
+dev    integration - branch from here
+```
+
+Always branch from `dev`, never from `main`. Prefix branches `feature/` `bugfix/` `hotfix/`
+`release/` `chore/` `docs/`. Merge to `dev` by PR; promote by a `dev` → `main` PR. Merging
+that PR is what deploys - there is no other path.
+
+| Environment | Branch | GitHub environment | Stack dir | Port |
+|---|---|---|---|---|
+| Production | `main` | `production` | `/opt/camamtieudao` | 4249 |
+| Development | `dev` | `development` | `/opt/camamtieudao` | 4249 |
+
+**No workflow knows a hostname.** `deploy.yml` picks its environment with
+`github.ref_name == 'main' && 'production' || 'development'`, and the environment supplies
+`VM_USER` / `VM_HOST` / `VM_SSH_KEY`. Repointing an environment at a different machine is a
+settings change, not a commit. Concurrency groups are per-ref.
+
+Port 4249 continues the workspace allocation (4245 landing, 4246 demo, 4247 license,
+4248 telemetry). The app serves its UI and API on that one port, published on loopback; the
+host's nginx owns `:443` and forwards to it. The bundled `tls` Caddy profile is for a customer
+with no reverse proxy of their own - vm0/vm1 do not use it.
+
+`deploy/` IS the install package. Every deploy runs the same `install.sh` a customer runs, so
+the install path is exercised on every merge.
+
+## Conventions
+
+- Strict TypeScript, `noUnusedLocals` / `noUnusedParameters`.
+- The app holds **no state on disk**. No database. If history is ever added, that is when a
+  `postgres` profile belongs in `deploy/docker-compose.yml` - not before.
+- `.env` is never in a deploy payload; the host's configuration survives every deploy.
+- Commit messages follow Conventional Commits, as in the Proxyma repos: `feat:` `fix:`
+  `chore:` `docs:`. English, lower case after the prefix, no `Co-Authored-By` trailer.

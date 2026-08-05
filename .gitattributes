@@ -1,0 +1,16 @@
+# Normalize to LF in the repository. Windows working copies still get CRLF via
+# core.autocrlf, but what is *stored* no longer depends on each contributor's git config.
+#
+# This is not cosmetic. deploy/install.sh is tarred from a Linux runner straight onto the
+# target host: a single CRLF in the shebang turns it into `/usr/bin/env bash\r`, and the host
+# reports "bad interpreter: No such file or directory" - naming a file that plainly exists.
+* text=auto eol=lf
+
+# Belt and braces for the files where a CR is fatal rather than untidy.
+*.sh        text eol=lf
+Dockerfile  text eol=lf
+Caddyfile   text eol=lf
+*.yml       text eol=lf
+
+# Ground truth is UTF-8 with meaningful full-width punctuation; never touch it.
+*.jpwabc    text eol=lf working-tree-encoding=UTF-8

@@ -1,0 +1,12 @@
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+
+# Never commit a real environment file or anything the installer generates on a host.
+.env
+.env.local
+*.env.local
+deploy/.env
+deploy/data/

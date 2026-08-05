@@ -1,0 +1,108 @@
+name: Deploy
+
+# main -> production, dev -> development. One environment per host.
+#
+# This runs the SAME install package a customer would get, through the same install.sh, so the
+# install path is exercised on every merge rather than only when someone installs it.
+#
+# No hostname appears anywhere in this file. The job selects its GitHub environment from the
+# branch, and the environment supplies VM_USER / VM_HOST / VM_SSH_KEY - so repointing an
+# environment at a different machine is a settings change, not a commit.
+on:
+  push:
+    branches: [main, dev]
+  workflow_dispatch:
+
+# Per-ref, so a dev push never cancels or queues behind a production deploy.
+concurrency:
+  group: deploy-camamtieudao-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'production' || 'development' }}
+    env:
+      VM: ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}
+      STACK: /opt/camamtieudao
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck and test
+        run: |
+          npm run typecheck
+          npm test
+
+      - run: npm run build
+
+      - name: Assemble the install package
+        run: |
+          test -f .next/standalone/server.js
+          cp -r deploy payload
+          # Next's standalone output is a tree with server.js at the root and a pruned
+          # node_modules beside it, but it deliberately excludes the static assets and public/
+          # - those are served by the same process and have to be put back by hand.
+          mkdir -p payload/app
+          cp -r .next/standalone/. payload/app/
+          mkdir -p payload/app/.next
+          cp -r .next/static payload/app/.next/static
+          [ -d public ] && cp -r public payload/app/public || true
+          test -f payload/app/server.js
+
+      - name: Add the deploy key
+        env:
+          VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
+          VM_HOST: ${{ secrets.VM_HOST }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          # printf, not echo, so the value lands byte-for-byte. tr -d '\r' strips the CRLF a
+          # Windows paste leaves behind - OpenSSH reports that only as "error in libcrypto",
+          # a message that says nothing about line endings, followed by a "Permission denied
+          # (publickey)" that points at the wrong thing entirely.
+          printf '%s\n' "$VM_SSH_KEY" | tr -d '\r' > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+          if ! ssh-keygen -y -f ~/.ssh/id_ed25519 >/dev/null 2>&1; then
+            echo "::error::VM_SSH_KEY is not a usable OpenSSH private key."
+            echo "::error::  lines in secret : $(wc -l < ~/.ssh/id_ed25519)"
+            echo "::error::  BEGIN header    : $(grep -c 'BEGIN .*PRIVATE KEY' ~/.ssh/id_ed25519)"
+            echo "::error::  END footer      : $(grep -c 'END .*PRIVATE KEY' ~/.ssh/id_ed25519)"
+            echo "::error::Paste the WHOLE file including BEGIN and END, with no added indentation."
+            exit 1
+          fi
+          echo "deploy key OK"
+
+          ssh-keyscan -H "$VM_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Ship and install
+        run: |
+          # app/ is EMPTIED, not deleted, and for the same reason the landing site empties
+          # site/: anything bind-mounted follows the inode. .env is never in the payload, so
+          # the host's configuration survives every deploy.
+          ssh "$VM" "mkdir -p '$STACK/app' && find '$STACK/app' -mindepth 1 -delete"
+          tar -czf - -C payload . | ssh "$VM" "tar -xzf - -C '$STACK'"
+          ssh "$VM" "chmod +x '$STACK/install.sh' && cd '$STACK' && CAMAM_ASSUME_YES=1 ./install.sh"
+
+      - name: Verify the service is serving
+        run: |
+          # Checked over SSH against the loopback port rather than over the public hostname:
+          # this proves the deploy, not DNS and not the host's nginx. The public path is a
+          # separate concern and fails differently.
+          PORT=$(ssh "$VM" "grep -E '^HTTP_PORT=' '$STACK/.env' | cut -d= -f2-" || echo 4249)
+          PORT=${PORT:-4249}
+          for i in $(seq 1 20); do
+            if ssh "$VM" "curl -fsS -o /dev/null http://127.0.0.1:${PORT}/api/health"; then
+              echo "camamtieudao is serving on 127.0.0.1:${PORT}"; exit 0
+            fi
+            sleep 5
+          done
+          echo "no healthy response within 100s"
+          ssh "$VM" "cd '$STACK' && docker compose logs --tail 80 app"
+          exit 1
