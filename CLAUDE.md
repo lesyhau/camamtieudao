@@ -108,10 +108,22 @@ Always branch from `dev`, never from `main`. Prefix branches `feature/` `bugfix/
 `release/` `chore/` `docs/`. Merge to `dev` by PR; promote by a `dev` → `main` PR. Merging
 that PR is what deploys - there is no other path.
 
-| Environment | Branch | GitHub environment | Stack dir | Port |
-|---|---|---|---|---|
-| Production | `main` | `production` | `/opt/camamtieudao` | 4249 |
-| Development | `dev` | `development` | `/opt/camamtieudao` | 4249 |
+| Environment | Branch | GitHub environment | Host | Stack dir | Port |
+|---|---|---|---|---|---|
+| Production | `main` | `production` | `vm-camamtieudao` (GCP), Debian 13 | `/opt/camamtieudao` | 4249 |
+| Development | `dev` | `development` | **not provisioned** | `/opt/camamtieudao` | 4249 |
+
+`deploy.yml` **skips cleanly** when its environment has no `VM_HOST`, which is what `dev` does
+today. Proxyma deleted its dev deploy jobs outright for the opposite reason - they targeted a
+host that had never been provisioned, so every dev push failed on a step that could not
+succeed. Skipping keeps the wiring for the day a dev host appears. Do not point `dev` at the
+production VM to "make it work": one environment per host is the rule, and two stacks of the
+same service on one box collide on the stack directory, the loopback port *and* the compose
+project name - the third of which fails silently.
+
+The host is bootstrapped once by `deploy/host-setup.sh` (Docker, nginx, certbot, the stack
+directory). It is idempotent and is not part of a deploy. TLS is issued by hand, once DNS
+points at the machine - see the command that script prints.
 
 **No workflow knows a hostname.** `deploy.yml` picks its environment with
 `github.ref_name == 'main' && 'production' || 'development'`, and the environment supplies

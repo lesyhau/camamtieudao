@@ -1,13 +1,15 @@
 name: CI
 
-# Typecheck, test, build. Nothing else - deploy.yml handles main and dev.
+# Typecheck, test, build. Nothing else - deploy.yml ships.
 #
-# `dev` is deliberately absent from the push triggers even though deploy.yml runs on it:
-# deploy.yml does the same three steps before shipping, so listing dev here would run every
-# merge twice. Pull requests are where this workflow earns its keep.
+# `dev` IS in the push triggers, unlike proxyma-landing's CI. There, dev pushes were covered
+# by the deploy job doing the same steps first; here deploy.yml skips entirely while the
+# `development` environment has no host, so without this a dev push would be validated by
+# nothing at all. Once a development host exists this duplicates three steps on dev merges -
+# cheap, and the alternative is a branch nobody checks.
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
 
 concurrency:
