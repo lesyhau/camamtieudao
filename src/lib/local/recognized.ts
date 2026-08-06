@@ -13,7 +13,9 @@ export interface RecognizedNum {
   dot: number;
   div: number;
   augment: number;
-  x: number;
+  /** Real RecognizedScore carries the bounding box; the flattened JSON dumps only its x. */
+  bbox?: { x: number };
+  x?: number;
   lyrics?: string[] | null;
   sectionMark?: string | null;
   slurStart?: boolean;
@@ -42,6 +44,17 @@ const TONIC_BY_FIFTHS: Record<number, string> = {
   [-1]: "F", [-2]: "bB", [-3]: "bE", [-4]: "bA", [-5]: "bD", [-6]: "bG", [-7]: "bC",
 };
 
+/**
+ * Horizontal position of a note. Throws rather than returning a default: a missing x silently
+ * makes every note compare false against every barline, which collapses the whole part into
+ * one measure and shows up only as a barline score of 2%.
+ */
+function noteX(n: RecognizedNum): number {
+  const x = n.bbox?.x ?? n.x;
+  if (typeof x !== "number") throw new Error("RecognizedNum has neither bbox.x nor x");
+  return x;
+}
+
 export function fromRecognized(rec: RecognizedScore): RawScore {
   const notes: RawNote[] = [];
   const measures: RawMeasure[] = [];
@@ -60,7 +73,7 @@ export function fromRecognized(rec: RecognizedScore): RawScore {
     let bi = 0;
     for (const n of row.nums) {
       // Advance past every barline this note sits to the right of.
-      while (bi < row.barlineXs.length && n.x > row.barlineXs[bi]) { bi++; measureIdx++; }
+      while (bi < row.barlineXs.length && noteX(n) > row.barlineXs[bi]) { bi++; measureIdx++; }
       notes.push({
         digit: n.digit,
         octave: n.digit === 0 ? 0 : n.octave,
@@ -79,7 +92,7 @@ export function fromRecognized(rec: RecognizedScore): RawScore {
     // A row whose last note has no barline after it runs into the next row: the sheet prints no
     // barline at a system break, so closing the measure there would split a real one in two.
     // Same rule as jpeditor's own toMusicXml.
-    const lastX = row.nums[row.nums.length - 1].x;
+    const lastX = noteX(row.nums[row.nums.length - 1]);
     if (row.barlineXs.some((x) => x >= lastX)) measureIdx++;
   });
 
