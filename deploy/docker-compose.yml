@@ -41,7 +41,13 @@ services:
       # Comma-separated allowlist. Empty means any Google account may sign in.
       AUTH_ALLOWED_EMAILS: ${AUTH_ALLOWED_EMAILS:-}
 
-      # --- Zalo Official Account (the first release's front end) ---
+      # --- Messenger (the first release's front end) ---
+      MESSENGER_PAGE_TOKEN: ${MESSENGER_PAGE_TOKEN:-}
+      MESSENGER_APP_SECRET: ${MESSENGER_APP_SECRET:-}
+      MESSENGER_VERIFY_TOKEN: ${MESSENGER_VERIFY_TOKEN:-}
+      MESSENGER_GRAPH_VERSION: ${MESSENGER_GRAPH_VERSION:-v25.0}
+
+      # --- Zalo Official Account (second, once the OA application clears) ---
       ZALO_APP_ID: ${ZALO_APP_ID:-}
       ZALO_OA_SECRET: ${ZALO_OA_SECRET:-}
       ZALO_OA_ACCESS_TOKEN: ${ZALO_OA_ACCESS_TOKEN:-}

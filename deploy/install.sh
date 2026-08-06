@@ -76,7 +76,12 @@ fi
 
 # Requirements depend on which front ends are switched on. Zalo is the first release; the web
 # UI and the paid tier are optional, and demanding their config would block a Zalo-only deploy.
-[ -n "$(envget ZALO_OA_ACCESS_TOKEN)" ] || warn     "ZALO_OA_ACCESS_TOKEN is empty - the bot can receive webhooks but cannot reply."
+if [ -z "$(envget MESSENGER_PAGE_TOKEN)" ] && [ -z "$(envget ZALO_OA_ACCESS_TOKEN)" ]; then
+    warn "neither MESSENGER_PAGE_TOKEN nor ZALO_OA_ACCESS_TOKEN is set - no front end can reply."
+fi
+[ -n "$(envget MESSENGER_PAGE_TOKEN)" ] && [ -z "$(envget MESSENGER_APP_SECRET)" ] && warn     "MESSENGER_APP_SECRET is empty - webhooks are accepted WITHOUT signature verification."
+[ -n "$(envget MESSENGER_PAGE_TOKEN)" ] && [ -z "$(envget MESSENGER_VERIFY_TOKEN)" ] && warn     "MESSENGER_VERIFY_TOKEN is empty - Meta's setup handshake will fail."
+true  # the two `&&` chains above must not decide this script's exit status under set -e
 [ -n "$(envget ZALO_OA_SECRET)" ] || warn     "ZALO_OA_SECRET is empty - webhooks are accepted WITHOUT signature verification.
          Fine for the first handshake, not for anything after it."
 [ -n "$(envget LLM_API_KEY)" ] || echo "  no LLM_API_KEY: paid tier disabled, free tier unaffected"
