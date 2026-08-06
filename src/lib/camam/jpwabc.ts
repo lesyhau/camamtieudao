@@ -4,15 +4,10 @@
 // carrier differs (JPX inlines `[...]` per note, .jpwabc uses slash-separated
 // `.Words` segments with an @measure,note offset). Sharing `readNote` keeps the two
 // in step, so a JPX parser is this file minus the section machinery.
-import type { Accidental } from "./types.ts";
+import type { NoteToken } from "./notation.ts";
+import { readNote } from "./notation.ts";
 
-export interface RawNote {
-  digit: number;
-  octave: number;
-  accidental: Accidental;
-  underscores: number;
-  dots: number;
-  dashes: number;
+export interface RawNote extends NoteToken {
   line: number;
   measure: number;
   group: number;
@@ -49,27 +44,6 @@ const FIFTHS: Record<string, number> = {
 };
 
 export const fifthsOf = (tonic: string): number => FIFTHS[tonic] ?? 0;
-
-/** One note token: accidental? digit octave-marks? dots/underscores (either order) dashes. */
-const NOTE_RE = /^(#b|#|b)?([0-7])('+|,+)?([._]*)(-*)/;
-
-function readNote(s: string): { note: Omit<RawNote, "line" | "measure" | "group" | "tie" | "slur">; len: number } | null {
-  const m = NOTE_RE.exec(s);
-  if (!m) return null;
-  const [full, acc, digit, oct, mods, dashes] = m;
-  const octave = !oct ? 0 : oct[0] === "'" ? oct.length : -oct.length;
-  return {
-    note: {
-      digit: Number(digit),
-      octave,
-      accidental: acc === "#b" ? "n" : acc === "#" ? "#" : acc === "b" ? "b" : null,
-      underscores: (mods.match(/_/g) ?? []).length,
-      dots: (mods.match(/\./g) ?? []).length,
-      dashes: dashes.length,
-    },
-    len: full.length,
-  };
-}
 
 function parseVoice(lines: string[], out: RawScore): void {
   let lineIdx = 0;

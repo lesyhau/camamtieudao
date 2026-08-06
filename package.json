@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "node --test src/lib/camam/*.test.ts",
+    "test": "node --test \"src/lib/**/*.test.ts\"",
     "fixture": "node scripts/render-fixture.ts"
   },
   "dependencies": {

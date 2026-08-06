@@ -5,7 +5,13 @@ import type { RawScore } from "./jpwabc.ts";
 import { fifthsOf } from "./jpwabc.ts";
 import { ANCHORS, lengthOf, mapAll, pos } from "./camam.ts";
 
-const CREDIT_RE = /^(.*?)(作词|作曲|编曲|记谱|译词|演唱)$/;
+/** The credit roles printed on Chinese sheets. Shared with the JPX reader so the two agree. */
+export const CREDIT_ROLES = ["作词", "作曲", "编曲", "记谱", "译词", "演唱"] as const;
+
+// Sheets print the name first and the role last (`郭德紫毅 作词`), and .jpwabc keeps that
+// order. JPX writes the role first because it is a structured field; its reader normalizes
+// back to this order so there is only ever one credit parser.
+const CREDIT_RE = new RegExp(`^(.*?)(${CREDIT_ROLES.join("|")})$`);
 
 export function build(raw: RawScore, engine: string): CamAmDoc {
   const warnings: string[] = [];
