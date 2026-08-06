@@ -111,7 +111,15 @@ say "Checking"
 # The status code, not curl's exit code: `curl -f` collapses "connection refused" and "404"
 # into one failure, which sends you looking at the wrong layer.
 for i in $(seq 1 24); do
-    CODE=$(curl -s -o /dev/null -w '%{http_code}' "http://${BIND}:${PORT}/api/health" 2>/dev/null || echo 000)
+    # `|| true` on the ASSIGNMENT, not `|| echo 000` inside the substitution. curl already
+    # writes 000 to stdout when it cannot connect, so the old inner fallback appended a second
+    # one and produced "000000" - which matches neither arm below and fell through to the
+    # hard-error case, reporting a container that was merely still starting as a failed
+    # deploy. The `|| true` is still required: without it, curl's non-zero exit on a refused
+    # connection aborts the whole script under `set -e`, which is what the old form was
+    # accidentally preventing.
+    CODE=$(curl -s -o /dev/null -w '%{http_code}' "http://${BIND}:${PORT}/api/health" 2>/dev/null) || true
+    CODE="${CODE:-000}"
     case "$CODE" in
         200) echo "  serving on http://${BIND}:${PORT}"
              say "DONE"
