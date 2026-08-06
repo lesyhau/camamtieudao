@@ -95,8 +95,15 @@ function parseVoice(lines: string[], out: RawScore): void {
       if (s.startsWith("||")) { closeMeasure("||"); s = s.slice(2); continue; }
       if (s.startsWith("|]")) { closeMeasure("|]"); s = s.slice(2); continue; }
       if (s.startsWith("|")) { closeMeasure("|"); s = s.slice(1); continue; }
+      // Same as the JPX reader: the volta follows the barline that opened its measure, so
+      // that measure already exists by the time this token is read.
       const volta = /^\[([12])/.exec(s);
-      if (volta) { pendingEnding = Number(volta[1]); s = s.slice(2); continue; }
+      if (volta) {
+        const cur = out.measures[out.measures.length - 1];
+        if (cur && !out.notes.some((x) => x.measure === cur.index)) cur.ending = Number(volta[1]);
+        else pendingEnding = Number(volta[1]);
+        s = s.slice(2); continue;
+      }
 
       if (s.startsWith("(")) {
         if (depth === 0) { openedGroupAt = out.notes.length; groupId++; }

@@ -76,6 +76,17 @@ export function parseJpx(text: string): RawScore {
     measureIdx++;
     startMeasure();
   };
+  /**
+   * A volta is written just after the barline that opens its measure - `:| [2 4 |` - so by the
+   * time the token is read, closeMeasure has already created that measure. Setting it on the
+   * still-empty current measure is therefore the common case; `pendingEnding` only covers a
+   * volta written before any barline at all.
+   */
+  const setEnding = (n: number): void => {
+    const cur = out.measures[out.measures.length - 1];
+    if (cur && !out.notes.some((x) => x.measure === cur.index)) cur.ending = n;
+    else pendingEnding = n;
+  };
 
   const raw = text.split(/\r?\n/);
   for (let ln = 0; ln < raw.length; ln++) {
@@ -134,8 +145,15 @@ export function parseJpx(text: string): RawScore {
       if (s.startsWith("||")) { closeMeasure("||"); s = s.slice(2); continue; }
       if (s.startsWith("|]")) { closeMeasure("|]"); s = s.slice(2); continue; }
       if (s.startsWith("|"))  { closeMeasure("|");  s = s.slice(1); continue; }
-      const volta = /^\[([12])(?![^\]]*\])/.exec(s);
-      if (volta) { pendingEnding = Number(volta[1]); s = s.slice(2); continue; }
+      // A volta is a standalone token, so it is followed by whitespace or the line end. That
+      // is the whole disambiguation from a lyric bracket - and a lyric can only be consumed
+      // immediately after a note or a `)`, never here at token start.
+      //
+      // This previously used a negative lookahead for a later `]`, which any lyric anywhere
+      // on the line defeated: `| [1 1_[我]` failed to parse, and the repair loop then spent
+      // two model calls asking for a correction to a line that was already right.
+      const volta = /^\[([12])(?=\s|$)/.exec(s);
+      if (volta) { setEnding(Number(volta[1])); s = s.slice(2); continue; }
 
       if (s.startsWith("(")) {
         if (depth === 0) { openedGroupAt = out.notes.length; groupId++; }
@@ -154,6 +172,31 @@ export function parseJpx(text: string): RawScore {
         if (after && depth === 0 && out.notes.length) {
           pushGroupLyric(inline, out, out.notes.length - 1, after.parts);
           s = s.slice(after.len);
+        }
+        continue;
+      }
+
+      // A dash detached from its note: `6[线] - 0`. On the sheet the augmentation dash IS a
+      // separate glyph printed to the right, so models write it as a separate token however
+      // firmly the spec asks for one unbroken run - and the repair loop cannot talk them out
+      // of something they are reading correctly. It means exactly what an attached dash means,
+      // so accept it and add it to the note it follows.
+      const loose = /^-+/.exec(s);
+      if (loose) {
+        if (!out.notes.length) throw new JpxError("a dash before any note", src, ln + 1);
+        const target = out.notes.length - 1;
+        out.notes[target].dashes += loose[0].length;
+        s = s.slice(loose[0].length);
+        // `6, -[心]` - the syllable written on the held note, but placed after the dash because
+        // that is where the printed word sits. It belongs to the note the dash extends.
+        const held = readLyric(s);
+        if (held) {
+          for (let v = 0; v < held.parts.length; v++) {
+            const t = held.parts[v].trim();
+            if (t) inline.push({ noteIdx: target, verse: v + 1, text: t });
+          }
+          verseCount = Math.max(verseCount, held.parts.length);
+          s = s.slice(held.len);
         }
         continue;
       }

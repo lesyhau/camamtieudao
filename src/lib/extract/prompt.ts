@@ -29,6 +29,7 @@ NOTE TOKEN, written as one unbroken run of characters:
   dots         . for each augmentation dot printed to the RIGHT of the digit.
   underscores  _ for each beam/underline UNDER the digit. Each one halves the duration.
   dashes       - for each horizontal line to the RIGHT of the digit. Each adds one beat.
+               Attached (6--) or spaced (6 - -) are both accepted and mean the same.
   lyric        [text] - see LYRICS.
 
   Order matters: 1._ is a dotted note with one beam. 5--- is a note held four beats.

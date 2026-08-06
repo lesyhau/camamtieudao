@@ -103,6 +103,16 @@ test("verses are pipe-separated in reading order", () => {
   assert.deepEqual(d.groups[1].lyrics, { "1": "世", "2": "命" });
 });
 
+test("a volta parses on a line that also contains lyrics", () => {
+  // Regression: the volta was detected with a lookahead for a later `]`, which every lyric on
+  // the line defeated. Real model output hit this on its first try.
+  const d = build(parseJpx("#key 1=C\n#meter 4/4\nL1: 1[我] |: [1 2_[会] 3_[在] :| [2 4 |"), "t");
+  assert.deepEqual(d.notes.map((n) => n.digit), [1, 2, 3, 4]);
+  assert.ok(d.measures.some((m) => m.ending === 1), "first ending");
+  assert.ok(d.measures.some((m) => m.ending === 2), "second ending");
+  assert.equal(d.groups.find((g) => g.notes[0] === 1)?.lyrics["1"], "会");
+});
+
 test("a malformed line fails loudly and quotes itself back", () => {
   // The repair prompt needs the offending line verbatim to ask for it again.
   assert.throws(
@@ -116,4 +126,28 @@ test("unknown headers are ignored rather than fatal", () => {
   // A model inventing `#composer` should not cost us the whole sheet.
   const d = build(parseJpx("#key 1=C\n#meter 4/4\n#composer someone\nL1: 1 |"), "t");
   assert.equal(d.notes.length, 1);
+});
+
+test("a dash detached from its note still extends it", () => {
+  // The sheet prints the augmentation dash as its own glyph, so models emit `6 - -` rather
+  // than `6--` no matter what the spec asks for. Both must mean three beats.
+  const attached = build(parseJpx("#key 1=C\n#meter 4/4\nL1: 6-- 0 |"), "t");
+  const spaced = build(parseJpx("#key 1=C\n#meter 4/4\nL1: 6 - - 0 |"), "t");
+  assert.deepEqual(spaced.notes.map((n) => n.dashes), attached.notes.map((n) => n.dashes));
+  assert.deepEqual(spaced.notes[0].length, { num: 3, den: 1, x: 3 });
+  assert.equal(spaced.notes.length, 2, "a loose dash must not become a note of its own");
+});
+
+test("a lyric survives a dash written after it", () => {
+  const d = build(parseJpx("#key 1=C\n#meter 4/4\nL1: 6[线] - 0 |"), "t");
+  assert.equal(d.groups.find((g) => g.notes[0] === 0)?.lyrics["1"], "线");
+  assert.equal(d.notes[0].dashes, 1);
+});
+
+test("a lyric written after a loose dash belongs to the held note", () => {
+  // `6, -[心]`: the printed word sits under the dash, so the model writes it there.
+  const d = build(parseJpx("#key 1=C\n#meter 4/4\nL1: 6, -[心] 0 |"), "t");
+  assert.equal(d.notes.length, 2);
+  assert.equal(d.notes[0].dashes, 1);
+  assert.equal(d.groups.find((g) => g.notes[0] === 0)?.lyrics["1"], "心");
 });
