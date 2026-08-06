@@ -26,20 +26,41 @@ jobs:
       VM: ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}
       STACK: /opt/camamtieudao
     steps:
-      # An environment with no host configured means that tier does not exist yet. Skip
-      # cleanly rather than failing: proxyma deleted its dev deploy jobs outright because they
-      # targeted a host that was never provisioned, so every push to dev failed on a step that
-      # could not succeed. Skipping keeps the wiring in place for the day the host appears,
-      # without a guaranteed-red build in the meantime.
+      # An environment with no host configured means that tier does not exist yet.
+      #
+      # On a non-production branch that is fine and the job skips: proxyma deleted its dev
+      # deploy jobs outright because they targeted a host that was never provisioned, so every
+      # push to dev failed on a step that could not succeed. Skipping keeps the wiring for the
+      # day a dev host appears.
+      #
+      # On `main` it is NOT fine and this FAILS. A push to main is supposed to reach
+      # production; skipping quietly there reports success for a deploy that never happened,
+      # which is indistinguishable from a green deploy until someone loads the site. The most
+      # likely cause is the environment being named something other than `production`, or the
+      # secrets being set at repository scope instead of environment scope - an
+      # environment-scoped secret is invisible to a job that selects a different environment.
       - name: Is this environment provisioned?
         id: gate
         run: |
-          if [ -z "${{ secrets.VM_HOST }}" ]; then
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::No VM_HOST in the '${{ github.ref_name == 'main' && 'production' || 'development' }}' environment - nothing to deploy to. Skipping."
-          else
+          ENV_NAME="${{ github.ref_name == 'main' && 'production' || 'development' }}"
+          echo "branch      : ${{ github.ref_name }}"
+          echo "environment : $ENV_NAME"
+          echo "VM_HOST     : ${{ secrets.VM_HOST != '' && 'present' || 'MISSING' }}"
+          echo "VM_USER     : ${{ secrets.VM_USER != '' && 'present' || 'MISSING' }}"
+          echo "VM_SSH_KEY  : ${{ secrets.VM_SSH_KEY != '' && 'present' || 'MISSING' }}"
+          if [ -n "${{ secrets.VM_HOST }}" ]; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          echo "ready=false" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            echo "::error::The '$ENV_NAME' environment has no VM_HOST, so this push to main deployed NOTHING."
+            echo "::error::Check, in Settings > Environments:"
+            echo "::error::  1. an environment named exactly '$ENV_NAME' exists (not 'Production', not 'prod')"
+            echo "::error::  2. VM_HOST / VM_USER / VM_SSH_KEY are secrets OF THAT ENVIRONMENT, not repository secrets"
+            exit 1
+          fi
+          echo "::notice::No VM_HOST in '$ENV_NAME' - that tier is not provisioned yet. Skipping."
 
       - if: steps.gate.outputs.ready == 'true'
         uses: actions/checkout@v4
