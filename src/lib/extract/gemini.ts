@@ -25,6 +25,8 @@ export interface GenerateOptions {
   temperature?: number;
   maxOutputTokens?: number;
   signal?: AbortSignal;
+  /** Called with each incremental text fragment as it arrives. */
+  onChunk?: (text: string) => void;
 }
 
 export interface GenerateResult {
@@ -34,6 +36,32 @@ export interface GenerateResult {
 }
 
 const DEFAULT_BASE = "https://generativelanguage.googleapis.com/v1beta";
+
+/**
+ * Node's fetch aborts if response headers take longer than 300s, and a pro model reasoning
+ * over a dense sheet spends minutes THINKING before it emits anything - headers included. The
+ * failure is `UND_ERR_HEADERS_TIMEOUT`, which names nothing about the model or the sheet.
+ *
+ * Streaming does NOT rescue this: the delay is before the first byte, not during the body.
+ * So both timeouts are disabled and the caller's AbortSignal becomes the only deadline -
+ * which is the right place for it, since only the caller knows how long a user will wait.
+ *
+ * This uses undici's OWN fetch rather than the global one. Node embeds a different undici
+ * version internally, and handing the global fetch an Agent from the installed package fails
+ * with `invalid onRequestStart method` - the two disagree about the handler protocol. Matching
+ * the client to its dispatcher is the only stable combination.
+ */
+type UndiciModule = typeof import("undici");
+let undiciMod: UndiciModule | undefined;
+let dispatcher: InstanceType<UndiciModule["Agent"]> | undefined;
+
+async function longRunning(): Promise<{ fetch: UndiciModule["fetch"]; dispatcher: NonNullable<typeof dispatcher> }> {
+  if (!undiciMod) undiciMod = await import("undici");
+  if (!dispatcher) {
+    dispatcher = new undiciMod.Agent({ headersTimeout: 0, bodyTimeout: 0, connectTimeout: 30_000 });
+  }
+  return { fetch: undiciMod.fetch, dispatcher };
+}
 
 export class GeminiError extends Error {
   readonly status: number;
@@ -46,9 +74,14 @@ export class GeminiError extends Error {
   }
 }
 
+/**
+ * Always streams, even where the caller only wants the finished text: it costs nothing and it
+ * is what lets `onChunk` report progress on a call that runs for minutes. The header timeout
+ * is handled by the dispatcher above, not by streaming.
+ */
 export async function generate(cfg: GeminiConfig, opts: GenerateOptions): Promise<GenerateResult> {
   const base = cfg.baseUrl?.replace(/\/+$/, "") || DEFAULT_BASE;
-  const url = `${base}/models/${encodeURIComponent(cfg.model)}:generateContent`;
+  const url = `${base}/models/${encodeURIComponent(cfg.model)}:streamGenerateContent?alt=sse`;
 
   const body = {
     systemInstruction: { parts: [{ text: opts.system }] },
@@ -64,53 +97,107 @@ export async function generate(cfg: GeminiConfig, opts: GenerateOptions): Promis
     },
   };
 
-  const res = await fetch(url, {
+  const http = await longRunning();
+  const res = await http.fetch(url, {
     method: "POST",
     // The key goes in a header, not the query string: query strings end up in proxy logs and
     // in the URL of any error this throws.
     headers: { "content-type": "application/json", "x-goog-api-key": cfg.apiKey },
     body: JSON.stringify(body),
     signal: opts.signal,
+    dispatcher: http.dispatcher,
   });
 
-  const raw = await res.text();
-  if (!res.ok) {
+  if (!res.ok || !res.body) {
+    const raw = await res.text();
     let detail = raw.slice(0, 500);
     try { detail = JSON.parse(raw).error?.message ?? detail; } catch { /* keep the raw body */ }
     throw new GeminiError(res.status, detail);
   }
 
-  let json: unknown;
-  try { json = JSON.parse(raw); } catch {
-    throw new GeminiError(res.status, `response was not JSON: ${raw.slice(0, 300)}`);
-  }
-
-  const c = (json as {
+  interface Chunk {
     candidates?: Array<{ content?: { parts?: Array<{ text?: string }> }; finishReason?: string }>;
     usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; totalTokenCount?: number };
     promptFeedback?: { blockReason?: string };
-  });
-
-  const cand = c.candidates?.[0];
-  if (!cand) {
-    const blocked = c.promptFeedback?.blockReason;
-    throw new GeminiError(200, blocked ? `no candidate, blocked: ${blocked}` : "no candidate in response");
   }
 
-  // Reasoning models return thought parts with no `text`; concatenating only the text parts is
-  // what leaves the answer. A MAX_TOKENS finish is surfaced rather than silently truncated -
-  // half a sheet parses fine and would otherwise look like a model that skipped ten systems.
-  const text = (cand.content?.parts ?? []).map((p) => p.text ?? "").join("");
-  const u = c.usageMetadata ?? {};
-  return {
-    text,
-    finishReason: cand.finishReason ?? "UNKNOWN",
-    usage: {
-      input: u.promptTokenCount ?? 0,
-      output: u.candidatesTokenCount ?? 0,
-      total: u.totalTokenCount ?? 0,
-    },
+  let text = "";
+  let finishReason = "";
+  let blocked: string | undefined;
+  const usage = { input: 0, output: 0, total: 0 };
+  let sawCandidate = false;
+
+  for await (const evt of sseEvents(res.body as unknown as ByteStream, opts.signal)) {
+    let c: Chunk;
+    try { c = JSON.parse(evt) as Chunk; } catch { continue; }
+    if (c.promptFeedback?.blockReason) blocked = c.promptFeedback.blockReason;
+    const cand = c.candidates?.[0];
+    if (cand) {
+      sawCandidate = true;
+      // Reasoning models emit thought parts with no `text`; taking only text parts is what
+      // leaves the answer behind.
+      const piece = (cand.content?.parts ?? []).map((p) => p.text ?? "").join("");
+      if (piece) { text += piece; opts.onChunk?.(piece); }
+      if (cand.finishReason) finishReason = cand.finishReason;
+    }
+    // Usage is cumulative per chunk, so the last one that carries it wins.
+    if (c.usageMetadata) {
+      usage.input = c.usageMetadata.promptTokenCount ?? usage.input;
+      usage.output = c.usageMetadata.candidatesTokenCount ?? usage.output;
+      usage.total = c.usageMetadata.totalTokenCount ?? usage.total;
+    }
+  }
+
+  if (!sawCandidate) {
+    throw new GeminiError(200, blocked ? `no candidate, blocked: ${blocked}` : "no candidate in response");
+  }
+  // A MAX_TOKENS finish is surfaced rather than silently truncated: a half sheet parses
+  // perfectly and would otherwise look like a model that skipped the last ten systems.
+  return { text, finishReason: finishReason || "UNKNOWN", usage };
+}
+
+/**
+ * The minimal shape of a byte stream. Declared structurally rather than as a
+ * `ReadableStream<Uint8Array>` because undici's stream types and the DOM's disagree on
+ * variance, and naming either one drags this file into that argument for no benefit.
+ */
+interface ByteStream {
+  getReader(): {
+    read(): Promise<{ done: boolean; value?: Uint8Array }>;
+    releaseLock(): void;
   };
+}
+
+/** Yields the payload of each `data:` event in an SSE stream. */
+async function* sseEvents(body: ByteStream, signal?: AbortSignal): AsyncGenerator<string> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  try {
+    for (;;) {
+      if (signal?.aborted) throw new DOMException("aborted", "AbortError");
+      const { done, value } = await reader.read();
+      if (done) break;
+      // The API sends CRLF, so the event separator on the wire is \r\n\r\n. Normalizing on
+      // arrival means the separator search below is looking for the one thing it can find -
+      // matching only "\n\n" silently yielded no events at all and read as "no candidate".
+      buf += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
+      // Events are separated by a blank line; a single event may span several reads.
+      let sep: number;
+      while ((sep = buf.indexOf("\n\n")) !== -1) {
+        const block = buf.slice(0, sep);
+        buf = buf.slice(sep + 2);
+        const data = block
+          .split("\n")
+          .filter((l) => l.startsWith("data:"))
+          .map((l) => l.slice(5).trim())
+          .join("");
+        if (data && data !== "[DONE]") yield data;
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
 }
 
 /** Reads the model configuration from the environment. There is deliberately no settings UI. */

@@ -25,14 +25,27 @@ NOTE TOKEN, written as one unbroken run of characters:
   [#|b] digit [octave] [dots] [underscores] [dashes] [lyric]
 
   digit        0-7. 0 is a rest.
-  octave       ' for each dot ABOVE the digit, , for each dot BELOW.  5'  6,,
-  dots         . for each augmentation dot printed to the RIGHT of the digit.
-  underscores  _ for each beam/underline UNDER the digit. Each one halves the duration.
-  dashes       - for each horizontal line to the RIGHT of the digit. Each adds one beat.
+  octave       ' for each round DOT above the digit, , for each round DOT below it.
+               5'  6,,   Most notes have none at all.
+  dots         . for each round DOT printed to the RIGHT of the digit (augmentation dot).
+  underscores  _ for each horizontal LINE under the digit. Each one halves the duration.
+  dashes       - for each horizontal LINE to the RIGHT of the digit. Each adds one beat.
                Attached (6--) or spaced (6 - -) are both accepted and mean the same.
   lyric        [text] - see LYRICS.
 
   Order matters: 1._ is a dotted note with one beam. 5--- is a note held four beats.
+
+DOTS ARE NOT LINES. This is the single most common mistake, so check it deliberately.
+Below a digit you may find BOTH, and they mean completely different things:
+
+  a horizontal LINE below the digit  ->  _   halves the duration (a beam)
+  a round DOT below the digit        ->  ,   drops it one octave
+
+  When a note has both, the beams are drawn first and the octave dot sits BELOW them.
+  So a digit with two beam lines and one octave dot underneath is  3,__  - never  3,,,
+  Count the LINES to get the underscores. Count only the round DOTS to get the commas.
+  A note almost never has more than one octave dot; two is rare and three essentially
+  never happens. If you are about to write ,,, you have miscounted beams as dots.
 
 BARLINES AND REPEATS, each its own token:
   |     barline            ||   double barline        |]  final barline
@@ -105,9 +118,11 @@ export function userPrompt(req: PageRequest): string {
   }
 
   parts.push(
-    "Work system by system, left to right. For each system read the digits first, then go back " +
-    "and add the octave dots, beams, dashes and augmentation dots, then the slur arcs, then the " +
-    "lyrics. Check that every syllable you place sits under the note it is printed under.",
+    "Work system by system, left to right, in four passes over each system. First the digits " +
+    "and barlines. Then the horizontal lines - beams under the digits, dashes to their right. " +
+    "Then the round dots, above and below for octave and to the right for augmentation, " +
+    "keeping them separate from the lines you already counted. Then the slur arcs and the " +
+    "lyrics, checking each syllable sits under the note it is printed under.",
   );
 
   return parts.join("\n\n");
