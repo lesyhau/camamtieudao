@@ -30,19 +30,38 @@ services:
       # outside the host.
       - "${BIND_ADDR:-127.0.0.1}:${HTTP_PORT:-4249}:4249"
     environment:
-      # --- auth (Google only) ---
-      AUTH_URL: ${AUTH_URL:?AUTH_URL is required - the public origin, e.g. https://camamtieudao.com}
-      AUTH_SECRET: ${AUTH_SECRET:?AUTH_SECRET is required - generate with `openssl rand -base64 32`}
-      AUTH_GOOGLE_ID: ${AUTH_GOOGLE_ID:?AUTH_GOOGLE_ID is required}
-      AUTH_GOOGLE_SECRET: ${AUTH_GOOGLE_SECRET:?AUTH_GOOGLE_SECRET is required}
+      # --- auth (Google, for the web UI) ---
+      # Optional, and unused by the Zalo release: Zalo supplies identity there. Kept configured
+      # so a web front end can be turned on without touching this file. install.sh warns per
+      # front end rather than these failing the whole stack.
+      AUTH_URL: ${AUTH_URL:-}
+      AUTH_SECRET: ${AUTH_SECRET:-}
+      AUTH_GOOGLE_ID: ${AUTH_GOOGLE_ID:-}
+      AUTH_GOOGLE_SECRET: ${AUTH_GOOGLE_SECRET:-}
       # Comma-separated allowlist. Empty means any Google account may sign in.
       AUTH_ALLOWED_EMAILS: ${AUTH_ALLOWED_EMAILS:-}
 
-      # --- the model that reads the sheet ---
+      # --- Zalo Official Account (the first release's front end) ---
+      ZALO_APP_ID: ${ZALO_APP_ID:-}
+      ZALO_OA_SECRET: ${ZALO_OA_SECRET:-}
+      ZALO_OA_ACCESS_TOKEN: ${ZALO_OA_ACCESS_TOKEN:-}
+      # Pin to `a` or `b` once a real webhook has confirmed which formula Zalo signs with.
+      ZALO_SIGNATURE_MODE: ${ZALO_SIGNATURE_MODE:-either}
+      ZALO_LOG_RAW_EVENTS: ${ZALO_LOG_RAW_EVENTS:-0}
+
+      # --- conversion ---
+      # Free tier is CPU-bound at ~13s a sheet. Two at a time on 2 vCPU leaves the event loop
+      # room to keep acking webhooks.
+      DEFAULT_TIER: ${DEFAULT_TIER:-free}
+      OMR_CONCURRENCY: ${OMR_CONCURRENCY:-2}
+      OMR_MAX_PENDING: ${OMR_MAX_PENDING:-32}
+
+      # --- the model that reads the sheet (paid tier only) ---
       # There is no settings page by design; this is the only place the model is configured.
       LLM_PROVIDER: ${LLM_PROVIDER:-google}
       LLM_MODEL: ${LLM_MODEL:-gemini-2.5-pro}
-      LLM_API_KEY: ${LLM_API_KEY:?LLM_API_KEY is required}
+      # Only the paid tier calls a model; the free tier never leaves the box.
+      LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_BASE_URL: ${LLM_BASE_URL:-}
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4249/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]

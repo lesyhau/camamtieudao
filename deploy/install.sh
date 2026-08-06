@@ -74,19 +74,24 @@ if [ -z "$(envget AUTH_SECRET)" ]; then
     echo "  generated AUTH_SECRET"
 fi
 
-# Fail here, naming the variable, rather than letting compose interpolation produce its own
-# error - which names the variable but not the file it should have been in.
-for required in AUTH_URL AUTH_GOOGLE_ID AUTH_GOOGLE_SECRET LLM_API_KEY; do
-    [ -n "$(envget "$required")" ] || die "$required is empty in .env - see the comments there."
-done
-case "$(envget AUTH_URL)" in
-    https://*|http://localhost*) ;;
-    *) die "AUTH_URL must be an absolute origin, e.g. https://camamtieudao.com
+# Requirements depend on which front ends are switched on. Zalo is the first release; the web
+# UI and the paid tier are optional, and demanding their config would block a Zalo-only deploy.
+[ -n "$(envget ZALO_OA_ACCESS_TOKEN)" ] || warn     "ZALO_OA_ACCESS_TOKEN is empty - the bot can receive webhooks but cannot reply."
+[ -n "$(envget ZALO_OA_SECRET)" ] || warn     "ZALO_OA_SECRET is empty - webhooks are accepted WITHOUT signature verification.
+         Fine for the first handshake, not for anything after it."
+[ -n "$(envget LLM_API_KEY)" ] || echo "  no LLM_API_KEY: paid tier disabled, free tier unaffected"
+
+if [ -n "$(envget AUTH_URL)" ]; then
+    case "$(envget AUTH_URL)" in
+        https://*|http://localhost*) ;;
+        *) die "AUTH_URL must be an absolute origin, e.g. https://camamtieudao.com
           Google rejects the callback otherwise, with redirect_uri_mismatch." ;;
-esac
-[ -n "$(envget AUTH_ALLOWED_EMAILS)" ] || warn \
-    "AUTH_ALLOWED_EMAILS is empty: ANY Google account can sign in, and every sign-in spends
-         model credits. Set it unless this deployment is deliberately open."
+    esac
+    for required in AUTH_GOOGLE_ID AUTH_GOOGLE_SECRET; do
+        [ -n "$(envget "$required")" ] || die "AUTH_URL is set, so $required is required too."
+    done
+    [ -n "$(envget AUTH_ALLOWED_EMAILS)" ] || warn         "AUTH_ALLOWED_EMAILS is empty: ANY Google account can sign in."
+fi
 
 if [[ ",$PROFILES," == *",tls,"* ]] && [ -z "$(envget ACME_EMAIL)" ]; then
     [ "$ASSUME_YES" = "1" ] && die "ACME_EMAIL is required when the tls profile is on."
@@ -123,7 +128,9 @@ for i in $(seq 1 24); do
     case "$CODE" in
         200) echo "  serving on http://${BIND}:${PORT}"
              say "DONE"
-             echo "  Public origin: $(envget AUTH_URL)"
+             ORIGIN="$(envget AUTH_URL)"
+             [ -n "$ORIGIN" ] && echo "  Web origin:   $ORIGIN"
+             echo "  Zalo webhook: https://$(envget APP_HOST)/api/webhook/zalo"
              [ -n "$PROFILES" ] || echo "  Point your reverse proxy at http://${BIND}:${PORT}"
              exit 0 ;;
         000) ;;  # not up yet - keep waiting

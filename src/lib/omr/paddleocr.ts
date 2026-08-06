@@ -17,8 +17,10 @@ import { OffscreenCanvas, ImageData } from "./canvas.ts";
 
 // Models load from disk, not from a URL. OMR_MODEL_DIR lets the deployed image point at a
 // path outside the bundle; the default is the repo's own copy.
-const MODEL_DIR = process.env.OMR_MODEL_DIR
-  ?? new URL("../../../models/", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
+// Resolved at runtime from cwd, NOT via `new URL(..., import.meta.url)`: webpack treats that
+// pattern as a static asset import and tries to bundle the directory, which fails the build.
+// The deploy payload places models/ beside server.js, so cwd is right in the container too.
+const MODEL_DIR = process.env.OMR_MODEL_DIR ?? `${process.cwd()}/models`;
 const REC_URL = `${MODEL_DIR}/ch_PP-OCRv6_small_rec_infer.onnx`;
 const DICT_URL = `${MODEL_DIR}/ppocrv6_dict.txt`;
 const DET_URL = `${MODEL_DIR}/ch_PP-OCRv4_det_infer.onnx`;

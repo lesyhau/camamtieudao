@@ -96,7 +96,12 @@ jobs:
           mkdir -p payload/app/.next
           cp -r .next/static payload/app/.next/static
           [ -d public ] && cp -r public payload/app/public || true
+          # The OCR models are data, not code, so file tracing does not see them. MODEL_DIR
+          # resolves from cwd, and the container's WORKDIR is /app - so they go beside server.js.
+          cp -r models payload/app/models
           test -f payload/app/server.js
+          test -f payload/app/models/ppocrv6_dict.txt
+          du -sh payload/app | sed 's/^/          payload: /'
 
       - if: steps.gate.outputs.ready == 'true'
         name: Add the deploy key
