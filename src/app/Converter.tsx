@@ -172,6 +172,12 @@ export default function Converter() {
             >
               <strong>Kéo thả ảnh bản nhạc vào đây</strong>
               <div className="hint">hoặc bấm để chọn file · PNG, JPEG, WebP · tối đa 20MB</div>
+              {/* The privacy and quality note sits with the instruction it qualifies rather
+                  than at the foot of the page, where it was easy to miss. */}
+              <div className="note">
+                Ảnh được đọc trên máy chủ của chúng tôi và không lưu lại.
+                Ảnh rõ, đủ sáng và thẳng góc sẽ cho kết quả tốt nhất.
+              </div>
             </button>
           ) : (
             <>

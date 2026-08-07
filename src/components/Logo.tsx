@@ -10,7 +10,7 @@ export function Logo({ size = 28 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden focusable="false">
       <rect width="32" height="32" rx="7" fill="currentColor" />
-      <g fill="var(--logo-fg, #fff)">
+      <g fill="rgb(var(--brand-on-solid))">
         {/* the flute, angled as it is held */}
         <rect x="14.6" y="5.5" width="2.6" height="18" rx="1.3" transform="rotate(12 16 14)" />
         {/* finger holes */}

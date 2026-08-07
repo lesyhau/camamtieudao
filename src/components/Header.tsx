@@ -4,25 +4,27 @@ import { useState } from "react";
 import { Logo } from "./Logo.tsx";
 
 /**
- * Fixed bar, logo and title on the left, actions on the right - the same shape as Proxyma's.
+ * Proxyma's header, same shape and same tokens: fixed, glass over a single bottom rule, 56px
+ * tall, and the row inside capped to the same column the page body uses - that is what makes
+ * the logo sit directly above a section's first heading.
  *
- * The actions are stubs on purpose: sign-in and administration are not built yet, and a menu
- * that renders nothing has nowhere to grow to. Below the tablet breakpoint they collapse into
- * a hamburger, which is the layout they will need once they are real.
+ * Sign-in and administration are stubs; below 640px they collapse into a hamburger, which is
+ * the layout they will need once they are real rather than one retrofitted later.
  */
 export function Header() {
   const [open, setOpen] = useState(false);
 
   return (
-    <header className="site-header">
+    <header className="site-header glass">
       <div className="bar">
         <a className="brand" href="/">
           <Logo size={28} />
-          <span className="wordmark">Cảm Âm Tiêu Dao</span>
+          <span className="wordmark">CẢM ÂM</span>
         </a>
 
         <nav className="actions" aria-label="Chính">
-          <button className="ghost sm" type="button" disabled title="Sắp có">Đăng nhập</button>
+          <button className="navlink" type="button" disabled title="Sắp có">Quản trị</button>
+          <button className="navlink" type="button" disabled title="Sắp có">Đăng nhập</button>
         </nav>
 
         <button
@@ -42,7 +44,8 @@ export function Header() {
 
       {open && (
         <div className="menu">
-          <button className="ghost" type="button" disabled title="Sắp có">Đăng nhập</button>
+          <button className="navlink" type="button" disabled title="Sắp có">Quản trị</button>
+          <button className="navlink" type="button" disabled title="Sắp có">Đăng nhập</button>
         </div>
       )}
     </header>
