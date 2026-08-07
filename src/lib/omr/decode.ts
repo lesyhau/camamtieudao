@@ -7,10 +7,18 @@ import { rgbaToBinary } from "./preprocess.ts";
 import { decodeImage } from "./canvas.ts";
 import type { Binary } from "./types.ts";
 
-/** Larger images are downscaled first: past this, connected components get no more stable and
- *  everything downstream gets slower. Matches jpeditor's own limit so the tuned thresholds in
- *  jianpu.ts keep meaning what they meant. */
-const MAX_W = 2200;
+/**
+ * Larger images are downscaled to this width first.
+ *
+ * 2200 matches jpeditor's own limit, so the thresholds tuned in jianpu.ts keep meaning what
+ * they meant - they are ratios of the detected font size, so they should survive a smaller
+ * page, but "should" is not "measured".
+ *
+ * Configurable because memory scales with pixel count and the VM's ceiling is real: a full
+ * 2200px sheet peaks near 8GB. Lower it to trade resolution for headroom, and measure the
+ * accuracy cost rather than assuming it.
+ */
+const MAX_W = Number(process.env.OMR_MAX_WIDTH ?? 2200);
 
 /** True for PDF bytes, by mime or by the %PDF- magic number. */
 function isPdf(bytes: Uint8Array, mime?: string): boolean {

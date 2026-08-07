@@ -233,8 +233,16 @@ async function runRecArgmaxMany(inputs: { chw: Float32Array; dims: number[] }[])
  */
 const SESSION_OPTIONS = {
   executionProviders: ["cpu"],
-  // The arena is left ON deliberately: disabling it measured WORSE (18.3GB peak against
-  // 10.6GB), because ORT then reallocates per run instead of reusing blocks.
+  // The CPU memory arena is OFF.
+  //
+  // It grows against AVAILABLE MEMORY rather than against the work: the same sheet peaked at
+  // 3.6GB on a 3.9GB VM and 7.87GB on a 7.9GB VM, and dropping the input from 2200px to 1200px
+  // changed nothing (7.87GB either way). Both times the kernel killed the server. An allocator
+  // that expands to fill the machine cannot be sized around - a bigger box just moves the wall.
+  //
+  // An earlier local test suggested disabling it was worse. That reading came from Windows RSS,
+  // which reports the working set and never tracked what the VM saw.
+  enableCpuMemArena: process.env.OMR_ORT_ARENA === "1",
   // The box has 2 cores and the queue already runs conversions in parallel; letting ORT also
   // fan out oversubscribes them.
   intraOpNumThreads: Number(process.env.OMR_ORT_THREADS ?? 1),
