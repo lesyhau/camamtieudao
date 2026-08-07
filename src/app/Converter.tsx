@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Trash2, Music4, ImageUp } from "lucide-react";
+import { Trash2, Music4, ImageUp, Copy, Check } from "lucide-react";
 import type { CamAmDoc } from "@/lib/camam/types.ts";
+import { Button } from "@/components/ui/Button";
 
 interface Result { doc: CamAmDoc; ms: number }
 
@@ -202,15 +203,14 @@ export default function Converter() {
         </section>
 
         <section className="flex flex-col items-center gap-3 justify-self-center lg:self-center">
-          <button
-            onClick={convert}
-            disabled={!file || busy}
-            className="rounded-md bg-brand-solid text-brand-on-solid px-6 py-2.5 text-sm font-semibold hover:opacity-90 disabled:opacity-45 disabled:cursor-default transition-opacity focus-ring"
-          >
+          {/* The app's own Button, at the larger of its two sizes - same shape, font, colour
+              and states as Add Resource, just the size the component provides for a page-level
+              call to action. */}
+          <Button size="md" onClick={convert} disabled={!file || busy}>
             {phase === "uploading" ? `Đang tải lên… ${pct}%`
               : phase === "converting" ? "Đang đọc…"
-              : "Chuyển thành cảm âm"}
-          </button>
+              : "Dịch"}
+          </Button>
           {busy && (
             <div
               className="w-48 h-1.5 rounded-full bg-surface-alt overflow-hidden"
@@ -229,28 +229,35 @@ export default function Converter() {
         </section>
 
         <section aria-label="Kết quả" className="min-w-0">
-          <div className={`${SHEET} border border-line bg-surface overflow-auto !block p-4`}>
-            {error ? (
-              <div className="rounded-md border border-danger bg-danger/10 text-danger text-sm p-3">
-                {error}
-              </div>
-            ) : doc ? (
-              <ResultPanel
-                doc={doc}
-                ms={result?.ms}
-                mapping={active}
-                recommended={recommended}
-                setMapping={setMapping}
-                verse={verse}
-                setVerse={setVerse}
-                download={download}
-              />
-            ) : (
-              <div className="h-full flex flex-col items-center justify-center gap-2 text-ink-disabled">
-                <Music4 size={32} aria-hidden="true" />
-                <p className="text-sm">Cảm âm sẽ hiện ở đây</p>
-              </div>
-            )}
+          {/* The box scrolls, but the copy button must not scroll with it: the scrolling
+              element is the INNER absolute layer, so the button is a sibling of it and stays
+              pinned to the corner of the frame. */}
+          <div className={`${SHEET} border border-line bg-surface !block overflow-hidden`}>
+            <div className="absolute inset-0 overflow-auto p-4">
+              {error ? (
+                <div className="rounded-md border border-danger bg-danger/10 text-danger text-sm p-3">
+                  {error}
+                </div>
+              ) : doc ? (
+                <ResultPanel
+                  doc={doc}
+                  ms={result?.ms}
+                  mapping={active}
+                  recommended={recommended}
+                  setMapping={setMapping}
+                  verse={verse}
+                  setVerse={setVerse}
+                  download={download}
+                />
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center gap-2 text-ink-disabled">
+                  <Music4 size={32} aria-hidden="true" />
+                  <p className="text-sm">Cảm âm sẽ hiện ở đây</p>
+                </div>
+              )}
+            </div>
+            {/* Top right, mirroring the delete button on the sheet's top left. */}
+            {doc && !error && <CopyButton text={() => toPlainText(doc, active)} />}
           </div>
         </section>
       </div>
@@ -284,6 +291,83 @@ export default function Converter() {
   );
 }
 
+/**
+ * The result as pasteable text: header, then one line per printed line of the sheet, barlines
+ * as `|`. Notes only - a cảm âm is passed around as a bare note stream, and a lyric line
+ * underneath would only line up in a monospaced field, which a chat box or a forum post is not.
+ */
+function toPlainText(doc: CamAmDoc, mapping: string): string {
+  const label = doc.mappings[mapping]?.label ?? mapping;
+  const lines = doc.lines.flatMap((line) => {
+    const notes = doc.notes.filter((n) => n.line === line.index);
+    if (!notes.length) return [];
+    const out: string[] = [];
+    let measure = -1;
+    for (const n of notes) {
+      if (measure !== -1 && n.measure !== measure) out.push("|");
+      measure = n.measure;
+      out.push(n.rest ? "-" : (n.camAm[mapping] ?? "?"));
+    }
+    return [out.join(" ")];
+  });
+  return [
+    doc.title || "Bản nhạc",
+    `${doc.key.jianpu} · ${doc.meter.beats}/${doc.meter.beatType} · ${label}`,
+    "",
+    ...lines,
+    "",
+  ].join("\n");
+}
+
+/**
+ * Copy, then a tick for 5 seconds.
+ *
+ * `text` is a thunk rather than a string so switching mapping or verse cannot leave the button
+ * holding a stale copy of the score.
+ */
+function CopyButton({ text }: { text: () => string }) {
+  const [done, setDone] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clear on unmount, or a conversion cleared while the tick is showing sets state on a gone
+  // component.
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+
+  const copy = useCallback(async () => {
+    const value = text();
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch {
+      // navigator.clipboard is undefined outside a secure context - which is exactly the
+      // http://IP setup used to test before DNS moved. Fall back to the old selection trick.
+      const ta = document.createElement("textarea");
+      ta.value = value;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); } finally { ta.remove(); }
+    }
+    setDone(true);
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => setDone(false), 5000);
+  }, [text]);
+
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      aria-label={done ? "Đã chép" : "Chép cảm âm"}
+      title={done ? "Đã chép" : "Chép cảm âm"}
+      className={`absolute top-2 right-2 z-10 w-9 h-9 rounded-md border bg-canvas/90 flex items-center justify-center transition-colors focus-ring ${
+        done ? "border-success text-success" : "border-line text-ink-caption hover:border-brand-accent hover:text-ink-primary"
+      }`}
+    >
+      {done ? <Check size={16} aria-hidden="true" /> : <Copy size={16} aria-hidden="true" />}
+    </button>
+  );
+}
+
 function ResultPanel({ doc, ms, mapping, recommended, setMapping, verse, setVerse, download }: {
   doc: CamAmDoc;
   ms?: number;
@@ -303,7 +387,8 @@ function ResultPanel({ doc, ms, mapping, recommended, setMapping, verse, setVers
 
   return (
     <div>
-      <h2 className="text-lg font-bold text-ink-primary mb-0.5">{doc.title || "Bản nhạc"}</h2>
+      {/* pr-12 keeps a long title clear of the copy button pinned to the corner above it. */}
+      <h2 className="text-lg font-bold text-ink-primary mb-0.5 pr-12">{doc.title || "Bản nhạc"}</h2>
       <p className="text-xs text-ink-caption mb-4">
         {doc.key.jianpu} · {doc.meter.beats}/{doc.meter.beatType} · {doc.notes.length} nốt ·{" "}
         {doc.measures.length} ô nhịp · {doc.lines.length} dòng

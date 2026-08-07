@@ -84,9 +84,11 @@ export default {
         ui:       ['var(--font-grotesk)', 'system-ui', 'sans-serif'],
         // Alias kept so existing `font-grotesk` call sites resolve to the same stack.
         grotesk:  ['var(--font-grotesk)', 'system-ui', 'sans-serif'],
-        // The wordmark ONLY - never body text.
-        brand:    ['var(--font-orbitron)', 'sans-serif'],
-        orbitron: ['var(--font-orbitron)', 'sans-serif'],
+        // The wordmark. Proxyma sets its own in Orbitron, which Google publishes with the
+        // `latin` subset ONLY - every diacritic in "Cảm âm Tiêu Dao" would drop to a fallback
+        // face and the wordmark would render in two typefaces. Space Grotesk carries
+        // `vietnamese`, so it is the only one of the two that can spell the name.
+        brand:    ['var(--font-grotesk)', 'system-ui', 'sans-serif'],
         mono:     ['Consolas', 'Space Mono', 'Cascadia Code', 'monospace'],
       },
 

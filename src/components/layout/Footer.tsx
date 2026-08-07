@@ -1,50 +1,39 @@
-import { BrandIcon } from '@/components/ui/BrandIcon'
+import { BrandLockup } from '@/components/ui/BrandLogo'
 
 const LINK = 'block text-sm mb-2 text-ink-caption hover:text-ink-primary transition-colors'
 const HEADING = 'text-2xs label-upper text-ink-disabled mb-3'
 
+// Công cụ / Pháp lý are held back until the pages behind them exist - a footer column of links
+// to nothing is worse than a shorter footer. Hỗ trợ is the one that resolves today.
+//
+// `mt-auto` is what keeps the footer on the bottom edge of a short viewport: the page shell in
+// layout.tsx is a min-h-dvh flex column, so this pushes down against whatever slack is left. It
+// stays in flow, so on a long page it sits after the content rather than floating over it.
 export function Footer() {
   return (
-    <footer className="glass text-ink-caption py-12 px-6 border-t border-line">
+    <footer className="mt-auto glass text-ink-caption py-12 px-6 border-t border-line">
       <div className="max-w-5xl mx-auto">
         <div className="flex flex-wrap justify-between gap-10 mb-10">
           <div className="max-w-xs">
-            <a
-              href="/"
-              className="flex items-center gap-2 mb-3 no-underline hover:opacity-80 transition-opacity focus-ring rounded-sm"
-            >
-              <BrandIcon size={32} className="text-ink-primary" />
-              <span className="font-brand font-bold text-brand-legible text-lg tracking-[0.05em]">
-                Cảm Âm
-              </span>
-            </a>
-            <p className="text-sm text-ink-caption">
-              Đọc bản nhạc số (简谱) từ ảnh và chuyển sang cảm âm cho sáo và tiêu.
-              Ảnh được xử lý trên máy chủ của chúng tôi và không lưu lại.
-            </p>
+            <div className="mb-3">
+              <BrandLockup size={32} text="text-lg" />
+            </div>
+            <p className="text-sm text-ink-caption">Cảm âm nhạc Hoa chất lượng cao</p>
           </div>
 
           <div className="flex flex-wrap gap-12">
             <div>
-              <h4 className={HEADING}>Công cụ</h4>
-              <a href="/" className={LINK}>Chuyển cảm âm</a>
-              <a href="/#huong-dan" className={LINK}>Hướng dẫn</a>
-            </div>
-            <div>
               <h4 className={HEADING}>Hỗ trợ</h4>
-              <a href="mailto:hello@camamtieudao.com" className={LINK}>hello@camamtieudao.com</a>
-            </div>
-            <div>
-              <h4 className={HEADING}>Pháp lý</h4>
-              <a href="/privacy" className={LINK}>Chính sách riêng tư</a>
-              <a href="/terms" className={LINK}>Điều khoản sử dụng</a>
+              <a href="mailto:camamtieudao@outlook.com" className={LINK}>
+                camamtieudao@outlook.com
+              </a>
             </div>
           </div>
         </div>
 
         <div className="border-t border-line pt-6">
           <p className="text-xs text-ink-disabled">
-            &copy; {new Date().getFullYear()} Cảm Âm Tiêu Dao. Mọi thương hiệu của bên thứ ba
+            &copy; {new Date().getFullYear()} Cảm âm Tiêu Dao. Mọi thương hiệu của bên thứ ba
             thuộc về chủ sở hữu tương ứng.
           </p>
         </div>

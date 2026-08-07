@@ -89,7 +89,12 @@ npm run dev          # Next dev server
 npm run build        # production build -> .next/standalone
 npm run typecheck    # tsc --noEmit
 npm test             # node --test, the M1 unit + acceptance suites
+
+node scripts/logo-assets.ts   # logo.png -> public/logo*.png + src/app/{icon,apple-icon}.png
 ```
+
+On Windows `npm run build` **hangs** if a standalone server from an earlier test is still
+running: it holds locks on `.next`. Stop it first.
 
 Node **22.18+**. `src/lib/camam/` is plain `.ts` run through Node's own type stripping - no
 bundler, no ts-node - so relative imports there carry explicit `.ts` extensions and the code
@@ -137,6 +142,20 @@ with no reverse proxy of their own - vm0/vm1 do not use it.
 
 `deploy/` IS the install package. Every deploy runs the same `install.sh` a customer runs, so
 the install path is exercised on every merge.
+
+## Brand
+
+The UI is Proxyma's design system, copied as source (tokens in `globals.css`, `tailwind.config.ts`,
+`Button.tsx`, `ThemeToggle`, `SiteBackground`) rather than transcribed. Two deliberate departures:
+
+- **The wordmark is Space Grotesk, not Orbitron.** Google publishes Orbitron with the `latin`
+  subset only, so "Cảm âm Tiêu Dao" would lose every diacritic to a fallback face and render in
+  two typefaces. `font-brand` is remapped accordingly; Orbitron is not loaded at all.
+- **The mark is the brush photograph, not a trace of it.** `logo.png` (the artwork, at repo root)
+  is the source; `scripts/logo-assets.ts` derives alpha from luminance, trims to the ink, and
+  emits one PNG per mode plus the icons. It is not a vector: the dry-brush edge and the speckle
+  are the artwork, and a filled path only approximates them. Ink colour is baked per file
+  because ink-primary is a different hue in each mode, not an inversion.
 
 ## Conventions
 
