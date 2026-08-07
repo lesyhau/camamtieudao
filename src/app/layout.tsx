@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Space_Grotesk, Orbitron } from "next/font/google";
+import { MODE_INIT_SCRIPT } from "@/components/theme.ts";
 import "./globals.css";
 
 // Proxyma's two faces: Space Grotesk for everything, Orbitron for the wordmark ONLY.
@@ -13,9 +14,13 @@ export const metadata = {
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
-  // data-mode="dark" is the mode the page paints before hydration, as on proxyma.ai.
+  // data-mode is stamped by the inline script below before first paint; the "dark" here is
+  // only the pre-script fallback for a browser with JS disabled, matching the :root defaults.
   return (
-    <html lang="vi" data-mode="dark" className={`${grotesk.variable} ${orbitron.variable}`}>
+    <html lang="vi" data-mode="dark" className={`${grotesk.variable} ${orbitron.variable}`} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: MODE_INIT_SCRIPT }} />
+      </head>
       <body>{children}</body>
     </html>
   );
