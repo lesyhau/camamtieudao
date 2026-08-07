@@ -53,6 +53,9 @@ const DET_NAME = "ch_PP-OCRv4_det_infer.onnx";
 
 
 const REC_H = 48, REC_MAXW = 320, REC_MAXW_LONG = 2048;
+// Long strips are padded up to a multiple of this, so ORT sees a handful of input shapes
+// instead of one per strip.
+const STRIP_BUCKET = Number(process.env.OMR_STRIP_BUCKET ?? 128);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _ort: any = null;
@@ -384,11 +387,28 @@ function cellOf(src: OffscreenCanvas, bin: Binary, r: Rect, cell = 64, pad = 8):
 
 /** 画布 → rec 输入张量（等比缩放到高 REC_H、宽 ≤ maxW、零填充到 tensorW）。返回 chw + dims + 内容宽 w。
  *  maxW≤320 时 tensorW=320（保持逐格既有行为/精度）；放宽上限的长行按实际宽。 */
-function prepCell(cell: OffscreenCanvas, maxW = REC_MAXW): { chw: Float32Array; dims: number[]; w: number; tensorW: number } {
+function prepCell(cell: OffscreenCanvas, maxW = REC_MAXW, padTo = 0): { chw: Float32Array; dims: number[]; w: number; tensorW: number } {
   let w = Math.ceil(REC_H * (cell.width / cell.height));
   if (w > maxW) w = maxW;
   if (w < 1) w = 1;
-  const tensorW = maxW <= REC_MAXW ? REC_MAXW : w;
+  // Width the tensor is padded out to. Padding every cell to a single width keeps one graph
+  // shape so ORT never re-plans - a sensible browser optimization, and ruinous here.
+  //
+  // The rec head emits [1, T, 18709] (T scales with width, the class axis is the whole
+  // dictionary), so one 320-wide digit cell costs 3MB of output where its 48px of content
+  // needs 449KB. Across ~690 digit cells plus ~130 lyric strips that is what drove peak RSS
+  // to 7.8GB and had the kernel kill the server mid-conversion on an 8GB box.
+  //
+  // Long lyric strips used their OWN width, which meant ~130 distinct input shapes in one
+  // conversion. ORT's memory-pattern planner allocates an arena block per shape and keeps it,
+  // so distinct shapes - not total work - were what drove peak RSS to 7.8GB and had the kernel
+  // kill the server on an 8GB box. Bucketing to a multiple of STRIP_BUCKET turns ~130 shapes
+  // into ~16. The padding is zeros, which CTC decodes as blanks and collapses.
+  const tensorW = padTo > 0
+    ? Math.min(padTo, Math.max(8, Math.ceil(w / 8) * 8))
+    : maxW <= REC_MAXW
+      ? REC_MAXW
+      : Math.min(maxW, Math.ceil(w / STRIP_BUCKET) * STRIP_BUCKET);
   const tmp = new OffscreenCanvas(w, REC_H);
   const tctx = tmp.getContext("2d");
   if (!tctx) throw new Error("无法创建 2D 画布上下文");
