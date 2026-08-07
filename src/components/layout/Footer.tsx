@@ -32,7 +32,7 @@ export function Footer() {
                 YouTube · Lê Sỹ Hậu
               </a>
               <a href="https://www.facebook.com/le.sy.hau.110994" target="_blank" rel="noopener noreferrer" className={LINK}>
-                Facebook
+                Facebook · Lê Sỹ Hậu
               </a>
             </div>
             <div>

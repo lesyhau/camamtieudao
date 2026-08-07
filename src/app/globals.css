@@ -169,6 +169,29 @@
     --tw-ring-offset-color: rgb(var(--canvas));
   }
 
+  /* A scrollbar inside a panel, not the OS default. Windows/Chromium paints a 15-17px bar with
+     a grey track, which inside a 480px card is a column of chrome beside the content. 6px on a
+     transparent track, in the line token so it re-steps per mode.
+     See the @supports block below for why `scrollbar-width` is not set here. */
+  .thin-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+  .thin-scroll::-webkit-scrollbar-track { background: transparent; }
+  .thin-scroll::-webkit-scrollbar-thumb {
+    background: rgb(var(--line));
+    border-radius: 3px;
+  }
+  .thin-scroll::-webkit-scrollbar-thumb:hover { background: rgb(var(--ink-disabled)); }
+
+  /* Firefox has no ::-webkit-scrollbar and needs the standard properties - but they are scoped
+     to Firefox on purpose. Chromium supports `scrollbar-width` too, and when it is set it
+     ignores the ::-webkit- rules entirely: with both declared, Edge measured a 10px gutter
+     instead of 6px. `-moz-appearance` is the cheapest thing only Gecko claims to support. */
+  @supports (-moz-appearance: none) {
+    .thin-scroll {
+      scrollbar-width: thin;
+      scrollbar-color: rgb(var(--line)) transparent;
+    }
+  }
+
   /* Header/overlay chrome: the page's own radial glow reads through it instead of the
      bar sitting on it as an opaque slab. */
   .glass {

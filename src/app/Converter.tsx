@@ -121,14 +121,6 @@ export default function Converter() {
   }, [doc]);
   const active = mapping ?? recommended;
 
-  const download = useCallback(() => {
-    if (!doc) return;
-    const url = URL.createObjectURL(new Blob([JSON.stringify(doc, null, 2)], { type: "application/json" }));
-    const a = document.createElement("a");
-    a.href = url; a.download = `${doc.title || "cam-am"}.json`; a.click();
-    URL.revokeObjectURL(url);
-  }, [doc]);
-
   // Inert while a conversion is running: swapping the image mid-read would abandon the work
   // silently, and the drop target highlighting under a disabled delete button reads as a
   // control that should work.
@@ -164,10 +156,10 @@ export default function Converter() {
               <span className="text-xs text-ink-caption">
                 hoặc bấm để chọn file · PNG, JPEG, WebP · tối đa 20MB
               </span>
-              {/* The privacy and quality note sits with the instruction it qualifies rather
-                  than at the foot of the page, where it was easy to miss. */}
+              {/* Advice that changes what you do, sitting with the instruction it qualifies.
+                  The note about images not being stored is gone: it answered a question nobody
+                  had asked yet, and it made a simple dropzone read as a disclaimer. */}
               <span className="text-xs text-ink-disabled max-w-sm mt-4">
-                Ảnh được đọc trên máy chủ của chúng tôi và không lưu lại.
                 Ảnh rõ, đủ sáng và thẳng góc sẽ cho kết quả tốt nhất.
               </span>
             </button>
@@ -187,18 +179,17 @@ export default function Converter() {
                   onClick={() => setZoom(true)}
                   className="max-w-full max-h-full object-contain cursor-zoom-in block"
                 />
-                {/* Same icon-button shape as ThemeToggle: no fill at rest, a light wash on
-                    hover. NOT the ink-* colours it uses, though - this one sits on top of a
-                    white sheet photograph, where ink-primary in dark mode is near-white and
-                    would vanish. mono-500 is mode-invariant and holds on paper and on the
-                    surface behind it alike. */}
+                {/* ThemeToggle's icon-button shape - no fill at rest, a wash on hover - but in
+                    danger red at rest rather than a neutral that only turns red on hover. It
+                    sits on a white sheet photograph, so a neutral grey was both easy to miss
+                    and easy to mistake for part of the scan. */}
                 <button
                   type="button"
                   onClick={clear}
                   disabled={busy}
                   aria-label="Xoá ảnh"
                   title={busy ? "Đang dịch, không xoá được" : "Xoá ảnh"}
-                  className="absolute top-2 right-2 w-9 h-9 rounded-full flex items-center justify-center text-mono-500 hover:bg-mono-500/15 hover:text-danger transition-colors focus-ring disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-mono-500 disabled:cursor-not-allowed"
+                  className="absolute top-2 right-2 w-9 h-9 rounded-full flex items-center justify-center text-danger hover:bg-danger/15 transition-colors focus-ring disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed"
                 >
                   <Trash2 size={16} aria-hidden="true" />
                 </button>
@@ -220,7 +211,7 @@ export default function Converter() {
           <div className={`${SHEET} border border-line bg-surface !block overflow-hidden`}>
             {doc && !error ? (
               <>
-                <div className="absolute inset-0 overflow-auto p-4">
+                <div className="absolute inset-0 overflow-auto thin-scroll p-4">
                   <ResultPanel
                     doc={doc}
                     ms={result?.ms}
@@ -229,7 +220,6 @@ export default function Converter() {
                     setMapping={setMapping}
                     verse={verse}
                     setVerse={setVerse}
-                    download={download}
                   />
                 </div>
                 <CopyButton text={() => toPlainText(doc, active)} />
@@ -370,8 +360,11 @@ function CopyButton({ text }: { text: () => string }) {
       onClick={copy}
       aria-label={done ? "Đã chép" : "Chép cảm âm"}
       title={done ? "Đã chép" : "Chép cảm âm"}
-      className={`absolute top-2 right-2 z-10 w-9 h-9 rounded-md border bg-canvas/90 flex items-center justify-center transition-colors focus-ring ${
-        done ? "border-success text-success" : "border-line text-ink-caption hover:border-brand-accent hover:text-ink-primary"
+      // ThemeToggle's shape exactly: 36px round, no fill or border at rest, a light wash on
+      // hover. It sits on the result surface rather than on the sheet photograph, so unlike the
+      // delete button it can use the ink-* tokens that button uses.
+      className={`absolute top-2 right-2 z-10 w-9 h-9 rounded-full flex items-center justify-center transition-colors focus-ring ${
+        done ? "text-success" : "text-ink-secondary hover:bg-ink-caption/10 hover:text-ink-primary"
       }`}
     >
       {done ? <Check size={16} aria-hidden="true" /> : <Copy size={16} aria-hidden="true" />}
@@ -394,7 +387,7 @@ function SupportCard({ onClose }: { onClose: () => void }) {
   return (
     <aside
       aria-label="Ủng hộ Cảm âm Tiêu Dao"
-      className="absolute bottom-2 right-2 z-20 w-56 rounded-card border border-line bg-canvas/95 backdrop-blur-md shadow-card-lg p-3"
+      className="absolute bottom-2 right-2 z-20 w-64 rounded-card border border-line bg-canvas/95 backdrop-blur-md shadow-card-lg p-3"
     >
       <button
         type="button"
@@ -408,30 +401,34 @@ function SupportCard({ onClose }: { onClose: () => void }) {
 
       <h3 className="text-sm font-bold text-ink-primary pr-6 mb-1">Ủng hộ Cảm âm Tiêu Dao</h3>
       <p className="text-xs text-ink-caption leading-snug mb-2">
-        Công cụ luôn miễn phí. Ủng hộ giúp mình trả tiền máy chủ và làm nó tốt hơn.
+        Cảm âm Tiêu Dao sẽ luôn là một công cụ hoàn toàn miễn phí! Nếu bạn thấy hữu ích, hãy ủng hộ mình chút đỉnh để phụ giúp tiền duy trì máy chủ và tiếp thêm động lực cho mình ra thêm nhiều bản cảm âm mới nhé.
       </p>
 
-      {!qrFailed && (
-        /* eslint-disable-next-line @next/next/no-img-element -- a static asset at a fixed size */
-        <img
-          src="/qr-ung-ho.png"
-          alt="Mã QR chuyển khoản Vietcombank"
-          onError={() => setQrFailed(true)}
-          className="w-full rounded-md bg-white block"
-        />
-      )}
-
-      {/* Full width of the QR above it, so the name reads as its caption. */}
-      <div className="w-full text-center mt-2">
-        <p className="text-xs font-bold text-ink-primary tracking-wide">LE SY HAU</p>
-        <p className="text-xs text-ink-caption tabular-nums">0181003535874</p>
-        <p className="text-xs text-ink-disabled">Vietcombank</p>
+      {/* The QR and the name share one fixed-width column, so the name is exactly as wide as
+          the code above it and reads as its caption. 176px rather than the card's full inner
+          width: at full width the card ran to ~420px of a 679px panel, which is more of the
+          result covered than a tip jar has earned. */}
+      <div className="w-44 mx-auto">
+        {!qrFailed && (
+          /* eslint-disable-next-line @next/next/no-img-element -- a static asset at a fixed size */
+          <img
+            src="/qr-ung-ho.png"
+            alt="Mã QR chuyển khoản Vietcombank"
+            onError={() => setQrFailed(true)}
+            className="w-full rounded-md bg-white block"
+          />
+        )}
+        <div className="w-full text-center mt-2">
+          <p className="text-xs font-bold text-ink-primary tracking-wide">LE SY HAU</p>
+          <p className="text-xs text-ink-caption tabular-nums">0181003535874</p>
+          <p className="text-xs text-ink-disabled">Vietcombank</p>
+        </div>
       </div>
     </aside>
   );
 }
 
-function ResultPanel({ doc, ms, mapping, recommended, setMapping, verse, setVerse, download }: {
+function ResultPanel({ doc, ms, mapping, recommended, setMapping, verse, setVerse }: {
   doc: CamAmDoc;
   ms?: number;
   mapping: string;
@@ -439,7 +436,6 @@ function ResultPanel({ doc, ms, mapping, recommended, setMapping, verse, setVers
   setMapping: (m: string) => void;
   verse: number;
   setVerse: (v: number) => void;
-  download: () => void;
 }) {
   const chip = (on: boolean) =>
     `rounded-md border px-2.5 py-1 text-xs transition-colors focus-ring ${
@@ -477,7 +473,6 @@ function ResultPanel({ doc, ms, mapping, recommended, setMapping, verse, setVers
             ))}
           </div>
         )}
-        <button onClick={download} className={chip(false)}>Tải JSON</button>
       </div>
 
       <Score doc={doc} mapping={mapping} verse={verse} />
@@ -500,26 +495,26 @@ function Score({ doc, mapping, verse }: { doc: CamAmDoc; mapping: string; verse:
         if (!notes.length) return null;
         let measure = -1;
         return (
-          <div key={line.index} className="mb-5">
-            <div className="flex flex-wrap gap-x-2 gap-y-0.5 items-end">
+          <div key={line.index} className="mb-4">
+            {/* items-start, so a wrapped row starts a fresh line of cells at the same height
+                rather than hanging off the tallest one in the row above. */}
+            <div className="flex flex-wrap gap-x-1 gap-y-2 items-start">
               {notes.map((n) => {
                 const newMeasure = measure !== -1 && n.measure !== measure;
                 measure = n.measure;
                 const name = n.rest ? "–" : (n.camAm[mapping] ?? "?");
-                // Case already encodes the octave; weight repeats it so a glance is enough.
-                const band = n.rest
-                  ? "text-ink-disabled"
-                  : name === name.toUpperCase()
-                    ? "font-bold text-brand-accent-legible"
-                    : name[0] === name[0]?.toUpperCase()
-                      ? "font-semibold text-ink-primary"
-                      : "text-ink-primary";
                 return (
                   <span key={n.id} className="contents">
-                    {newMeasure && <span aria-hidden="true" className="self-stretch w-px bg-line mx-1" />}
-                    <span className="flex flex-col items-center min-w-[1.5rem]">
-                      <span className={`tabular-nums whitespace-nowrap ${band}`}>{name}</span>
-                      <span className="text-xs text-ink-caption min-h-[1.2em] whitespace-nowrap">
+                    {newMeasure && <span aria-hidden="true" className="w-px h-11 bg-line mx-1.5" />}
+                    {/* Fixed row heights, not min-heights. Every cell is the same 44px tall
+                        whether or not it carries a syllable, and whether that syllable is a
+                        Latin one or a taller CJK glyph - which is what keeps the notes on one
+                        line instead of each cell finding its own baseline. */}
+                    <span className="flex flex-col items-center min-w-[2rem]">
+                      <span className={`h-6 leading-6 whitespace-nowrap ${n.rest ? "text-ink-disabled" : "text-ink-primary"}`}>
+                        {name}
+                      </span>
+                      <span className="h-5 leading-5 text-xs text-ink-caption whitespace-nowrap">
                         {syllableOf(n.id, n.group)}
                       </span>
                     </span>
