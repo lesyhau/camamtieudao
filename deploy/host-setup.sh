@@ -44,12 +44,21 @@ else
     apt-get update -qq
     apt-get install -y -qq ca-certificates curl gnupg >/dev/null
     install -m 0755 -d /etc/apt/keyrings
-    curl -fsSL https://download.docker.com/linux/debian/gpg \
-        | gpg --dearmor --yes -o /etc/apt/keyrings/docker.gpg
-    chmod a+r /etc/apt/keyrings/docker.gpg
+    # Distro taken from os-release, not hardcoded. The first host was Debian 13 and its
+    # replacement is Ubuntu 26.04; pointing Ubuntu at the Debian repo 404s on a codename that
+    # only exists in the other distro, which reads as a broken mirror rather than a wrong URL.
+    DISTRO="$(. /etc/os-release && echo "$ID")"
     CODENAME="$(. /etc/os-release && echo "$VERSION_CODENAME")"
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
-https://download.docker.com/linux/debian $CODENAME stable" > /etc/apt/sources.list.d/docker.list
+    case "$DISTRO" in
+        debian|ubuntu) ;;
+        *) die "unsupported distro '$DISTRO' - Docker's repo layout only covers debian and ubuntu." ;;
+    esac
+    curl -fsSL "https://download.docker.com/linux/$DISTRO/gpg"         | gpg --dearmor --yes -o /etc/apt/keyrings/docker.gpg
+    chmod a+r /etc/apt/keyrings/docker.gpg
+    if ! curl -fsSL -o /dev/null "https://download.docker.com/linux/$DISTRO/dists/$CODENAME/Release"; then
+        die "Docker publishes nothing for $DISTRO/$CODENAME. See https://download.docker.com/linux/$DISTRO/dists/"
+    fi
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/$DISTRO $CODENAME stable" > /etc/apt/sources.list.d/docker.list
     apt-get update -qq
     apt-get install -y -qq docker-ce docker-ce-cli containerd.io \
         docker-buildx-plugin docker-compose-plugin >/dev/null
@@ -129,6 +138,23 @@ nginx -t
 systemctl enable --now nginx >/dev/null 2>&1 || true
 systemctl reload nginx
 echo "  serving ${APP_HOST} on :80 -> 127.0.0.1:${HTTP_PORT}"
+
+# --- 3b. Swap ------------------------------------------------------------------
+# A conversion peaks around 3.6GB. Swap is a margin against the kernel killing the server
+# mid-run, not a performance plan - if it is heavily used, the box is too small.
+say "[3b] Swap"
+if /sbin/swapon --show 2>/dev/null | grep -q /swapfile; then
+    echo "  already present"
+elif [ "$(df --output=avail -k / | tail -1)" -lt 4194304 ]; then
+    warn "less than 4GB free on / - skipping swapfile"
+else
+    dd if=/dev/zero of=/swapfile bs=1M count=2048 status=none
+    chmod 600 /swapfile
+    /sbin/mkswap /swapfile >/dev/null
+    /sbin/swapon /swapfile
+    grep -q '/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
+    echo "  2GB swapfile created"
+fi
 
 # --- 4. certbot ---------------------------------------------------------------
 say "[4/5] certbot"

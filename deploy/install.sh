@@ -39,6 +39,24 @@ fi
               cp -r .next/static deploy/app/.next/static && cp -r public deploy/app/public"
 echo "  $($DOCKER --version)"
 
+# The payload carries prebuilt native modules, and they are platform-specific. npm installs the
+# optional binary for the machine that ran `npm ci`, and onnxruntime-node's postinstall fetches
+# its shared library for THAT platform only - so a payload assembled on Windows or macOS has a
+# Linux .node binding with no libonnxruntime.so.1 behind it, and @napi-rs/canvas has no linux
+# binary at all. Both surface at runtime as a failed conversion, which reads as a bad photo.
+#
+# CI builds on ubuntu-latest, which is correct. This catches a hand-assembled payload.
+MISSING=""
+[ -d app/node_modules/@napi-rs/canvas-linux-x64-gnu ] || MISSING="$MISSING @napi-rs/canvas-linux-x64-gnu"
+ls app/node_modules/onnxruntime-node/bin/napi-v6/linux/x64/libonnxruntime.so* >/dev/null 2>&1     || MISSING="$MISSING onnxruntime-node/libonnxruntime.so"
+if [ -n "$MISSING" ]; then
+    die "this payload was not built on Linux - missing:$MISSING
+          Native modules are platform-specific and cannot be cross-assembled. Let the deploy
+          workflow build it (it runs on ubuntu-latest), or run npm ci && npm run build on a
+          Linux machine."
+fi
+echo "  native modules: linux binaries present"
+
 # --- 2. Configuration ---------------------------------------------------------
 say "[2/4] Configuration"
 if [ ! -f .env ]; then
