@@ -1,22 +1,67 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CamAmDoc } from "@/lib/camam/types.ts";
 
 interface Result { doc: CamAmDoc; ms: number }
 
 const ACCEPT = "image/png,image/jpeg,image/webp,image/bmp";
 
+/** Upload via XHR, not fetch: only XHR reports upload progress. */
+function upload(
+  file: File,
+  onProgress: (pct: number) => void,
+  signal: { xhr?: XMLHttpRequest },
+): Promise<Result> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    signal.xhr = xhr;
+    xhr.open("POST", "/api/convert");
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+    };
+    xhr.onload = () => {
+      // The server answers JSON, but nginx does not: a 502 or 504 arrives as an HTML error
+      // page. Parsing blindly threw, and the catch reported "cannot reach the server" for a
+      // server that had answered perfectly clearly.
+      let body: { error?: string; doc?: CamAmDoc; ms?: number } | null = null;
+      try { body = JSON.parse(xhr.responseText); } catch { /* not JSON - handled below */ }
+      if (xhr.status >= 200 && xhr.status < 300 && body?.doc) {
+        resolve(body as Result);
+        return;
+      }
+      if (body?.error) { reject(new Error(body.error)); return; }
+      reject(new Error(
+        xhr.status === 502 || xhr.status === 504
+          ? "Máy chủ đang quá tải khi đọc bản nhạc. Bạn thử lại sau ít phút nhé."
+          : `Máy chủ trả về lỗi ${xhr.status}. Bạn thử lại nhé.`,
+      ));
+    };
+    xhr.onerror = () => reject(new Error("Mất kết nối tới máy chủ. Kiểm tra mạng rồi thử lại nhé."));
+    xhr.onabort = () => reject(new DOMException("aborted", "AbortError"));
+    xhr.ontimeout = () => reject(new Error("Máy chủ phản hồi quá lâu. Bạn thử lại nhé."));
+    // Conversion is slow; the read timeout has to outlast it.
+    xhr.timeout = 300_000;
+    const body = new FormData();
+    body.append("image", file);
+    xhr.send(body);
+  });
+}
+
 export default function Converter() {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [phase, setPhase] = useState<"idle" | "uploading" | "converting">("idle");
+  const [pct, setPct] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [over, setOver] = useState(false);
+  const [zoom, setZoom] = useState(false);
   const [mapping, setMapping] = useState<string | null>(null);
   const [verse, setVerse] = useState(1);
   const inputRef = useRef<HTMLInputElement>(null);
+  const inflight = useRef<{ xhr?: XMLHttpRequest }>({});
+  const busy = phase !== "idle";
 
   const choose = useCallback((f: File | null) => {
     if (!f) return;
@@ -24,38 +69,63 @@ export default function Converter() {
       setError("Chỉ nhận ảnh (PNG, JPEG, WebP). File PDF chưa hỗ trợ.");
       return;
     }
+    // Replacing the image abandons whatever the old one produced.
+    inflight.current.xhr?.abort();
     setError(null);
     setResult(null);
+    setPhase("idle");
+    setPct(0);
     setFile(f);
-    // Revoked on replacement rather than on unmount: the preview outlives any single render.
     setPreview((old) => { if (old) URL.revokeObjectURL(old); return URL.createObjectURL(f); });
+  }, []);
+
+  const clear = useCallback(() => {
+    // Nothing is stored server-side - the endpoint converts and returns, it never writes the
+    // image to disk - so removing it here is the whole of "delete it from the server" too.
+    inflight.current.xhr?.abort();
+    setPreview((old) => { if (old) URL.revokeObjectURL(old); return null; });
+    setFile(null);
+    setResult(null);
+    setError(null);
+    setPhase("idle");
+    setPct(0);
+    setZoom(false);
   }, []);
 
   const convert = useCallback(async () => {
     if (!file) return;
-    setBusy(true);
     setError(null);
     setResult(null);
+    setPct(0);
+    setPhase("uploading");
     try {
-      const body = new FormData();
-      body.append("image", file);
-      const res = await fetch("/api/convert", { method: "POST", body });
-      const json = await res.json();
-      if (!res.ok) { setError(json.error ?? "Chuyển đổi thất bại."); return; }
-      setResult(json as Result);
+      const r = await upload(file, (p) => {
+        setPct(p);
+        // Upload finishing is where the wait changes character: bytes are sent, now the server
+        // reads the sheet. Saying so is the difference between "slow" and "stuck".
+        if (p >= 100) setPhase("converting");
+      }, inflight.current);
+      setResult(r);
       setMapping(null);
       setVerse(1);
-    } catch {
-      setError("Không kết nối được máy chủ. Thử lại nhé.");
+    } catch (e) {
+      if ((e as DOMException)?.name !== "AbortError") {
+        setError(e instanceof Error ? e.message : "Chuyển đổi thất bại.");
+      }
     } finally {
-      setBusy(false);
+      setPhase("idle");
     }
   }, [file]);
 
-  const doc = result?.doc;
+  // Escape closes the expanded image, which is what every lightbox has taught people to expect.
+  useEffect(() => {
+    if (!zoom) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setZoom(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [zoom]);
 
-  // Lead with the mapping that needs fewest octave bands: it is the one that fits the
-  // lower / Capitalised / UPPER scheme without spilling into the apostrophe fallback.
+  const doc = result?.doc;
   const recommended = useMemo(() => {
     if (!doc) return "";
     const ids = Object.keys(doc.mappings);
@@ -74,47 +144,93 @@ export default function Converter() {
     URL.revokeObjectURL(url);
   }, [doc]);
 
+  const dropProps = {
+    onDragOver: (e: React.DragEvent) => { e.preventDefault(); setOver(true); },
+    onDragLeave: () => setOver(false),
+    onDrop: (e: React.DragEvent) => {
+      e.preventDefault();
+      setOver(false);
+      // Dropping onto the current image replaces it outright.
+      choose(e.dataTransfer.files?.[0] ?? null);
+    },
+  };
+
   return (
     <>
-      <button
-        type="button"
-        className={`drop${over ? " over" : ""}`}
-        onClick={() => inputRef.current?.click()}
-        onDragOver={(e) => { e.preventDefault(); setOver(true); }}
-        onDragLeave={() => setOver(false)}
-        onDrop={(e) => { e.preventDefault(); setOver(false); choose(e.dataTransfer.files?.[0] ?? null); }}
-      >
-        <strong>Kéo thả ảnh bản nhạc vào đây</strong>
-        <div className="hint">hoặc bấm để chọn file · PNG, JPEG, WebP · tối đa 20MB</div>
-      </button>
+      {!preview ? (
+        <button
+          type="button"
+          className={`drop sheet${over ? " over" : ""}`}
+          onClick={() => inputRef.current?.click()}
+          {...dropProps}
+        >
+          <strong>Kéo thả ảnh bản nhạc vào đây</strong>
+          <div className="hint">hoặc bấm để chọn file · PNG, JPEG, WebP · tối đa 20MB</div>
+        </button>
+      ) : (
+        <>
+          <div className={`sheet shown${over ? " over" : ""}`} {...dropProps}>
+            {/* eslint-disable-next-line @next/next/no-img-element -- a blob: URL for the file the
+                user just picked; next/image would need a loader and buys nothing. */}
+            <img src={preview} alt="Ảnh bản nhạc" onClick={() => setZoom(true)} />
+            <button
+              type="button"
+              className="remove"
+              onClick={clear}
+              aria-label="Xoá ảnh"
+              title="Xoá ảnh"
+            >
+              {/* Trash glyph, inline so there is no icon dependency for one button. */}
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden focusable="false">
+                <path fill="currentColor" d="M9 3h6l1 2h4v2H4V5h4l1-2Zm-3 6h12l-1 12H7L6 9Zm4 2v8h1v-8h-1Zm3 0v8h1v-8h-1Z" />
+              </svg>
+            </button>
+          </div>
+
+          <div className="sheet-meta">
+            <span className="replace">Kéo thả ảnh khác vào để thay thế</span>
+            <span className="fileinfo">
+              {file?.name}
+              {file ? ` · ${(file.size / 1024 / 1024).toFixed(1)} MB` : null}
+            </span>
+          </div>
+        </>
+      )}
+
       <input
         ref={inputRef}
         type="file"
         accept={ACCEPT}
         hidden
-        onChange={(e) => choose(e.target.files?.[0] ?? null)}
+        onChange={(e) => { choose(e.target.files?.[0] ?? null); e.target.value = ""; }}
       />
-
-      {preview && (
-        <div className="preview">
-          {/* eslint-disable-next-line @next/next/no-img-element -- a blob: URL from the file the
-              user just picked; next/image would need a loader and buys nothing here. */}
-          <img src={preview} alt="Ảnh đã chọn" />
-          <div className="meta">
-            {file?.name}<br />
-            {file ? `${(file.size / 1024 / 1024).toFixed(1)} MB` : null}
-          </div>
-        </div>
-      )}
 
       <div className="row">
         <button className="primary" onClick={convert} disabled={!file || busy}>
-          {busy ? "Đang đọc bản nhạc…" : "Chuyển thành cảm âm"}
+          {phase === "uploading" ? `Đang tải lên… ${pct}%`
+            : phase === "converting" ? "Đang đọc bản nhạc…"
+            : "Chuyển thành cảm âm"}
         </button>
-        {busy && <span className="meta">Mất khoảng 10–20 giây.</span>}
+        {phase === "converting" && <span className="meta">Mất khoảng 10–30 giây.</span>}
       </div>
 
+      {busy && (
+        <div className="bar" role="progressbar" aria-valuenow={phase === "uploading" ? pct : undefined}>
+          {/* Upload has a real percentage; conversion has no progress to report, so it gets an
+              indeterminate sweep rather than a bar that pretends to know. */}
+          <div className={phase === "uploading" ? "fill" : "fill sweep"}
+               style={phase === "uploading" ? { width: `${pct}%` } : undefined} />
+        </div>
+      )}
+
       {error && <div className="error">{error}</div>}
+
+      {zoom && preview && (
+        <div className="lightbox" onClick={() => setZoom(false)} role="presentation">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={preview} alt="Ảnh bản nhạc phóng to" onClick={(e) => e.stopPropagation()} />
+        </div>
+      )}
 
       {doc && (
         <div className="result">
@@ -129,12 +245,7 @@ export default function Converter() {
             <div className="group">
               <span className="label">Cách bấm</span>
               {Object.entries(doc.mappings).map(([id, m]) => (
-                <button
-                  key={id}
-                  className="ghost"
-                  aria-pressed={id === active}
-                  onClick={() => setMapping(id)}
-                >
+                <button key={id} className="ghost" aria-pressed={id === active} onClick={() => setMapping(id)}>
                   {m.label}{id === recommended ? " ✓" : ""}
                 </button>
               ))}
@@ -162,8 +273,6 @@ export default function Converter() {
 }
 
 function Score({ doc, mapping, verse }: { doc: CamAmDoc; mapping: string; verse: number }) {
-  // A syllable belongs to a group and is printed on the group's FIRST note; the rest of the
-  // group is its melisma and stays blank.
   const syllableOf = (noteId: number, group: number): string => {
     const g = doc.groups.find((x) => x.id === group);
     return g && g.notes[0] === noteId ? (g.lyrics[String(verse)] ?? "") : "";
@@ -182,12 +291,11 @@ function Score({ doc, mapping, verse }: { doc: CamAmDoc; mapping: string; verse:
                 const newMeasure = measure !== -1 && n.measure !== measure;
                 measure = n.measure;
                 const name = n.rest ? "–" : (n.camAm[mapping] ?? "?");
-                // Case already encodes the octave; weight repeats it so a glance is enough.
                 const band = n.rest ? "" : name === name.toUpperCase() ? "up2"
                   : name[0] === name[0]?.toUpperCase() ? "up1" : "";
                 return (
                   <span key={n.id} style={{ display: "contents" }}>
-                    {newMeasure && <span className="bar" aria-hidden />}
+                    {newMeasure && <span className="bar-sep" aria-hidden />}
                     <span className={`note${n.rest ? " rest" : ""}`}>
                       <span className={`name ${band}`}>{name}</span>
                       <span className="syl">{syllableOf(n.id, n.group)}</span>

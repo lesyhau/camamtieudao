@@ -37,29 +37,95 @@ main { max-width: 66rem; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
 h1 { font-size: 1.6rem; margin: 0 0 .3rem; letter-spacing: -.01em; }
 .sub { color: var(--muted); margin: 0 0 2rem; }
 
-/* ---------------------------------------------------------------- dropzone */
+/* ------------------------------------------------------------------- sheet */
+/* A4 portrait, so the empty dropzone is already the shape of what goes in it and the layout
+   does not jump when an image replaces it. */
+.sheet {
+  aspect-ratio: 1 / 1.4142;
+  width: 100%;
+  /* Cap the WIDTH, not the height. `max-height` alone silently wins over aspect-ratio - the
+     box kept the viewport's height and the full column width, which measured 0.875 instead of
+     1.414. Deriving the width from the height budget keeps the ratio exact at any viewport. */
+  max-width: calc(70vh / 1.4142);
+  margin-inline: auto;
+  border-radius: var(--radius);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color .15s, background .15s;
+}
+
 .drop {
   border: 2px dashed var(--line);
-  border-radius: var(--radius);
-  padding: 2.75rem 1.5rem;
-  text-align: center;
+  flex-direction: column;
   cursor: pointer;
-  transition: border-color .15s, background .15s;
   background: transparent;
-  width: 100%;
   color: inherit;
   font: inherit;
+  text-align: center;
+  padding: 1.5rem;
 }
 .drop:hover, .drop:focus-visible { border-color: var(--accent); }
-.drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.sheet.over { border-color: var(--accent); background: var(--accent-soft); }
 .drop .hint { color: var(--muted); font-size: .9rem; margin-top: .4rem; }
 
-.preview { display: flex; gap: 1rem; align-items: center; margin-top: 1rem; }
-.preview img {
-  max-width: 140px; max-height: 180px; border-radius: 6px;
-  border: 1px solid var(--line); object-fit: contain; background: #fff;
+.sheet.shown {
+  border: 1px solid var(--line);
+  background: #fff;
+  overflow: hidden;
 }
-.preview .meta { font-size: .9rem; color: var(--muted); }
+/* `contain`, so a sheet that is not A4 is shown whole rather than cropped - a cropped stave is
+   worse than letterboxing. */
+.sheet.shown img {
+  max-width: 100%; max-height: 100%;
+  object-fit: contain;
+  cursor: zoom-in;
+  display: block;
+}
+
+.sheet .remove {
+  position: absolute; top: .5rem; left: .5rem;
+  width: 2rem; height: 2rem;
+  display: grid; place-items: center;
+  border: 1px solid var(--line); border-radius: 6px;
+  background: var(--bg); color: var(--danger);
+  cursor: pointer; padding: 0;
+}
+.sheet .remove:hover { border-color: var(--danger); }
+
+.sheet-meta {
+  display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
+  margin-top: .6rem; font-size: .85rem; color: var(--muted);
+}
+.sheet-meta .fileinfo { text-align: right; }
+
+/* ---------------------------------------------------------------- lightbox */
+.lightbox {
+  position: fixed; inset: 0; z-index: 50;
+  background: rgba(0,0,0,.82);
+  display: grid; place-items: center;
+  padding: 2rem; cursor: zoom-out;
+}
+.lightbox img {
+  max-width: 100%; max-height: 100%;
+  object-fit: contain; cursor: default;
+  background: #fff; border-radius: 4px;
+}
+
+/* ---------------------------------------------------------------- progress */
+.bar {
+  margin-top: .9rem; height: 6px; border-radius: 3px;
+  background: var(--line); overflow: hidden;
+}
+.bar .fill { height: 100%; background: var(--accent); transition: width .15s ease-out; }
+/* Conversion reports no progress, so it sweeps rather than showing a bar that pretends to
+   know how far along it is. */
+.bar .fill.sweep { width: 35%; animation: sweep 1.1s ease-in-out infinite; }
+@keyframes sweep {
+  0%   { margin-left: -35%; }
+  100% { margin-left: 100%; }
+}
 
 .row { display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; margin-top: 1.25rem; }
 
@@ -99,7 +165,7 @@ button.ghost[aria-pressed="true"] { border-color: var(--accent); background: var
 .note .syl { font-size: .82rem; color: var(--muted); min-height: 1.2em; white-space: nowrap; }
 .note.rest .name { color: var(--muted); }
 
-.bar { align-self: stretch; width: 1px; background: var(--line); margin: 0 .3rem; }
+.bar-sep { align-self: stretch; width: 1px; background: var(--line); margin: 0 .3rem; }
 
 /* Octave shown by weight as well as case, so it survives being read quickly. */
 .note .name.up1 { font-weight: 600; }
