@@ -192,8 +192,25 @@ async function runRecArgmaxMany(inputs: { chw: Float32Array; dims: number[] }[])
     _prof.infer += performance.now() - _t;
     return out;
   }
+  // Sequential, yielding periodically and dropping each input as it is consumed.
+  //
+  // One sheet makes ~690 of these calls. Each rec output is [1, T, 18709] float32 - about 3MB,
+  // because the class dimension is the whole dictionary - and each input is another 737KB, so
+  // holding the batch is ~500MB of inputs alone.
+  //
+  // HONEST NOTE: this did NOT measurably reduce peak RSS (18.3GB before and after, locally).
+  // It is kept because bounding what is live at once is right regardless, and because the
+  // measurement itself is suspect - Windows RSS reports the working set, while the VM's OOM
+  // kill recorded 3.4GB anon-rss for the same work. The real reduction still has to be found.
   const out: ArgmaxOut[] = [];
-  for (const inp of inputs) out.push(await wasmRecArgmax(inp.chw, inp.dims));
+  const CHUNK = Number(process.env.OMR_REC_CHUNK ?? 24);
+  for (let i = 0; i < inputs.length; i++) {
+    out.push(await wasmRecArgmax(inputs[i].chw, inputs[i].dims));
+    // The caller keeps the array; clearing the reference lets this input's buffer go now
+    // rather than when the whole batch finishes.
+    (inputs[i] as { chw: Float32Array | null }).chw = null;
+    if ((i + 1) % CHUNK === 0) await new Promise((r) => setImmediate(r));
+  }
   _prof.infer += performance.now() - _t;
   return out;
 }
@@ -202,8 +219,26 @@ async function runRecArgmaxMany(inputs: { chw: Float32Array; dims: number[] }[])
 
 
 /** 单线程建 rec session（回退用，必定可用）。 */
+/**
+ * Session options that keep peak memory bounded.
+ *
+ * ONNX Runtime's CPU memory arena is designed to grow and hold onto blocks so repeated runs
+ * avoid reallocation. Across the 400+ single-cell rec calls one sheet makes, that arena grew to
+ * a 10.6GB peak - invisible on a workstation, fatal on the 3.9GB VM, where the kernel OOM-killed
+ * the server mid-conversion. Disabling the arena and the memory-pattern planner trades a little
+ * throughput for allocations that are actually released between runs.
+ */
+const SESSION_OPTIONS = {
+  executionProviders: ["cpu"],
+  // The arena is left ON deliberately: disabling it measured WORSE (18.3GB peak against
+  // 10.6GB), because ORT then reallocates per run instead of reusing blocks.
+  // The box has 2 cores and the queue already runs conversions in parallel; letting ORT also
+  // fan out oversubscribes them.
+  intraOpNumThreads: Number(process.env.OMR_ORT_THREADS ?? 1),
+};
+
 async function createRecSingle(): Promise<unknown> {
-  return _ort.InferenceSession.create(`${modelDir()}/${REC_NAME}`, { executionProviders: ["cpu"] });
+  return _ort.InferenceSession.create(`${modelDir()}/${REC_NAME}`, SESSION_OPTIONS);
 }
 
 /** 按期望线程数建 rec session。多线程下额外做一次极小 warmup run 确认 worker 池真能响应
@@ -242,7 +277,7 @@ async function ensureDetSession(): Promise<void> {
   if (nativeOcr() || _detSession) return;
   if (_detInitPromise) return _detInitPromise;
   _detInitPromise = (async () => {
-    _detSession = await _ort.InferenceSession.create(`${modelDir()}/${DET_NAME}`, { executionProviders: ["cpu"] });
+    _detSession = await _ort.InferenceSession.create(`${modelDir()}/${DET_NAME}`, SESSION_OPTIONS);
   })();
   return _detInitPromise;
 }
