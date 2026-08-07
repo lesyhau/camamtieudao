@@ -21,7 +21,7 @@ export function Navbar() {
           href="/"
           className="flex items-center gap-2 no-underline hover:opacity-80 transition-opacity focus-ring rounded-sm"
         >
-          <BrandIcon size={28} />
+          <BrandIcon size={28} className="text-ink-primary" />
           <span className="font-brand font-bold text-brand-legible text-base tracking-[0.05em]">
             Cảm Âm
           </span>

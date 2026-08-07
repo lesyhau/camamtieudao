@@ -13,7 +13,7 @@ export function Footer() {
               href="/"
               className="flex items-center gap-2 mb-3 no-underline hover:opacity-80 transition-opacity focus-ring rounded-sm"
             >
-              <BrandIcon size={32} />
+              <BrandIcon size={32} className="text-ink-primary" />
               <span className="font-brand font-bold text-brand-legible text-lg tracking-[0.05em]">
                 Cảm Âm
               </span>
