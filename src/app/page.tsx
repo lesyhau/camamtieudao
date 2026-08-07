@@ -6,13 +6,15 @@ export default function Home() {
   return (
     <>
       <Navbar />
-      {/* pt-14 clears the fixed bar; the column is the same max-w-5xl + px-6 the header uses.
+      {/* pt-14 clears the fixed bar; the column is the same max-w-5xl and the same gutter the
+          header uses - 16px on a phone, where 24px on each side of a 390px screen was 12% of it
+          spent on margin, and 24px from `sm` up.
           flex-1 is what gives the footer below its slack to sink to the bottom edge. */}
       <main className="flex-1 pt-14">
         {/* py-16 was sized for a 49px display heading. At 16px - the largest size in the
             three-size scale - that much air around one short line reads as a mistake rather
             than as emphasis, so the block tightens to match the type. */}
-        <section className="max-w-5xl mx-auto px-6 pt-10 pb-8 text-center">
+        <section className="max-w-5xl mx-auto px-4 sm:px-6 pt-10 pb-8 text-center">
           {/* No eyebrow: it repeated the wordmark sitting directly above it in the header. */}
           <h1 className="text-base font-bold text-ink-primary mb-1">
             Dịch giản phổ thành cảm âm
@@ -22,7 +24,7 @@ export default function Home() {
           </p>
         </section>
 
-        <section className="max-w-5xl mx-auto px-6 pb-20">
+        <section className="max-w-5xl mx-auto px-4 sm:px-6 pb-16 sm:pb-20">
           <Converter />
         </section>
       </main>

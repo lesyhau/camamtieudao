@@ -387,7 +387,7 @@ function SupportCard({ onClose }: { onClose: () => void }) {
   return (
     <aside
       aria-label="Ủng hộ Cảm âm Tiêu Dao"
-      className="absolute bottom-2 right-2 z-20 w-64 rounded-card border border-line bg-canvas/95 backdrop-blur-md shadow-card-lg p-3"
+      className="absolute bottom-2 right-2 left-2 sm:left-auto z-20 max-w-xs sm:max-w-none sm:w-64 mx-auto sm:mx-0 rounded-card border border-line bg-canvas/95 backdrop-blur-md shadow-card-lg p-3"
     >
       <button
         type="button"
@@ -408,15 +408,20 @@ function SupportCard({ onClose }: { onClose: () => void }) {
           the code above it and reads as its caption. 176px rather than the card's full inner
           width: at full width the card ran to ~420px of a 679px panel, which is more of the
           result covered than a tip jar has earned. */}
-      <div className="w-44 mx-auto">
+      <div className="w-32 sm:w-44 mx-auto">
         {!qrFailed && (
-          /* eslint-disable-next-line @next/next/no-img-element -- a static asset at a fixed size */
-          <img
-            src="/qr-ung-ho.png"
-            alt="Mã QR chuyển khoản Vietcombank"
-            onError={() => setQrFailed(true)}
-            className="w-full rounded-md bg-white block"
-          />
+          /* The white padding is the QUIET ZONE, not decoration. The exported PNG is cropped
+             flush to the code, and a QR needs clear margin around it to be found at all - on a
+             dark card, with none, the finder patterns run straight into the background. */
+          <div className="bg-white rounded-md p-2.5">
+            {/* eslint-disable-next-line @next/next/no-img-element -- a static asset at a fixed size */}
+            <img
+              src="/qr-ung-ho.png"
+              alt="Mã QR chuyển khoản Vietcombank"
+              onError={() => setQrFailed(true)}
+              className="w-full block"
+            />
+          </div>
         )}
         <div className="w-full text-center mt-2">
           <p className="text-xs font-bold text-ink-primary tracking-wide">LE SY HAU</p>

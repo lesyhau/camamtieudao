@@ -15,7 +15,7 @@ import { ThemeToggle } from '@/components/ui/ThemeToggle'
 export function Navbar() {
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 glass border-b border-line">
-      <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between gap-6">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-6">
         {/* The tagline is inside the lockup now, stacked under the name - so the header and
             the footer carry the identical block, mark included. */}
         <BrandLockup />

@@ -11,7 +11,7 @@ const HEADING = 'text-xs label-upper text-ink-disabled mb-3'
 // stays in flow, so on a long page it sits after the content rather than floating over it.
 export function Footer() {
   return (
-    <footer className="mt-auto glass text-ink-caption py-12 px-6 border-t border-line">
+    <footer className="mt-auto glass text-ink-caption py-10 sm:py-12 px-4 sm:px-6 border-t border-line">
       <div className="max-w-5xl mx-auto">
         <div className="flex flex-wrap justify-between gap-10 mb-10">
           <div className="max-w-xs">
