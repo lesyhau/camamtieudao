@@ -199,12 +199,11 @@ async function runRecArgmaxMany(inputs: { chw: Float32Array; dims: number[] }[])
   //
   // One sheet makes ~690 of these calls. Each rec output is [1, T, 18709] float32 - about 3MB,
   // because the class dimension is the whole dictionary - and each input is another 737KB, so
-  // holding the batch is ~500MB of inputs alone.
+  // holding the whole batch would be ~500MB of inputs alone.
   //
-  // HONEST NOTE: this did NOT measurably reduce peak RSS (18.3GB before and after, locally).
-  // It is kept because bounding what is live at once is right regardless, and because the
-  // measurement itself is suspect - Windows RSS reports the working set, while the VM's OOM
-  // kill recorded 3.4GB anon-rss for the same work. The real reduction still has to be found.
+  // This did NOT reduce peak RSS when it was written, and the note here used to say the real
+  // reduction still had to be found. It has been: canvas.ts. Bounding what is live at once is
+  // still right, so this stays.
   const out: ArgmaxOut[] = [];
   const CHUNK = Number(process.env.OMR_REC_CHUNK ?? 24);
   for (let i = 0; i < inputs.length; i++) {
@@ -233,15 +232,13 @@ async function runRecArgmaxMany(inputs: { chw: Float32Array; dims: number[] }[])
  */
 const SESSION_OPTIONS = {
   executionProviders: ["cpu"],
-  // The CPU memory arena is OFF.
+  // The CPU memory arena is off by default, but NOT because it was the memory bug - it wasn't.
+  // That was drawImage; see canvas.ts. Measured on the VM after the real fix, one sheet:
   //
-  // It grows against AVAILABLE MEMORY rather than against the work: the same sheet peaked at
-  // 3.6GB on a 3.9GB VM and 7.87GB on a 7.9GB VM, and dropping the input from 2200px to 1200px
-  // changed nothing (7.87GB either way). Both times the kernel killed the server. An allocator
-  // that expands to fill the machine cannot be sized around - a bigger box just moves the wall.
+  //     arena off   18.0s   peak 623MB
+  //     arena on    17.4s   peak 601MB
   //
-  // An earlier local test suggested disabling it was worse. That reading came from Windows RSS,
-  // which reports the working set and never tracked what the VM saw.
+  // Neither setting matters. Off stays the default as the more conservative of two equals.
   enableCpuMemArena: process.env.OMR_ORT_ARENA === "1",
   // The box has 2 cores and the queue already runs conversions in parallel; letting ORT also
   // fan out oversubscribes them.
@@ -399,19 +396,18 @@ function prepCell(cell: OffscreenCanvas, maxW = REC_MAXW, padTo = 0): { chw: Flo
   let w = Math.ceil(REC_H * (cell.width / cell.height));
   if (w > maxW) w = maxW;
   if (w < 1) w = 1;
-  // Width the tensor is padded out to. Padding every cell to a single width keeps one graph
-  // shape so ORT never re-plans - a sensible browser optimization, and ruinous here.
+  // Width the tensor is padded out to. The rec head emits [1, T, 18709] (T scales with width,
+  // the class axis is the whole dictionary), so a 320-wide cell costs 3MB of output where 48px
+  // of content needs 449KB - worth not paying on a digit.
   //
-  // The rec head emits [1, T, 18709] (T scales with width, the class axis is the whole
-  // dictionary), so one 320-wide digit cell costs 3MB of output where its 48px of content
-  // needs 449KB. Across ~690 digit cells plus ~130 lyric strips that is what drove peak RSS
-  // to 7.8GB and had the kernel kill the server mid-conversion on an 8GB box.
+  // Bucketing long strips to a multiple of STRIP_BUCKET turns ~130 distinct input shapes into
+  // ~16, which keeps ORT re-planning down. The padding is zeros, which CTC decodes as blanks
+  // and collapses.
   //
-  // Long lyric strips used their OWN width, which meant ~130 distinct input shapes in one
-  // conversion. ORT's memory-pattern planner allocates an arena block per shape and keeps it,
-  // so distinct shapes - not total work - were what drove peak RSS to 7.8GB and had the kernel
-  // kill the server on an 8GB box. Bucketing to a multiple of STRIP_BUCKET turns ~130 shapes
-  // into ~16. The padding is zeros, which CTC decodes as blanks and collapses.
+  // NOTE: an earlier version of this comment blamed shape count for the 7.8GB peak that got the
+  // server OOM-killed. That was wrong - see the drawImage note in canvas.ts for what it actually
+  // was. Bucketing was measured at ~130 -> ~16 shapes with NO effect on peak RSS. It is kept
+  // because it is still the right thing to do, not because it fixed anything.
   const tensorW = padTo > 0
     ? Math.min(padTo, Math.max(8, Math.ceil(w / 8) * 8))
     : maxW <= REC_MAXW

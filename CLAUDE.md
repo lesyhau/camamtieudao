@@ -143,6 +143,31 @@ with no reverse proxy of their own - vm0/vm1 do not use it.
 `deploy/` IS the install package. Every deploy runs the same `install.sh` a customer runs, so
 the install path is exercised on every merge.
 
+## The free path - `src/lib/omr/`
+
+Vendored from jpeditor's OMR, which is **browser code**. Everything Node-specific lives in
+`canvas.ts`, so the vendored files differ from jpeditor's by an import line and stay re-syncable.
+Put Node-vs-browser fixes in the shim, not in the vendored files.
+
+One of those fixes is load-bearing. `drawImage(bigCanvas, sx,sy,sw,sh, ...)` under
+`@napi-rs/canvas` leaks a full-size copy of the **source** on every call, and GC never gets it
+back. Cropping ~690 digit cells and ~130 lyric strips out of a 2200x3112 page canvas is ~19GB of
+snapshots, so the process died against whatever ceiling it had - 3.6GB on the 3.9GB VM, 7.87GB on
+the 7.9GB one, exactly 3GB under a 3GB cgroup cap. It read like an allocator sizing itself to the
+machine, which sent four investigations (ORT arena, input-shape count, input resolution, GC
+pressure) after the wrong thing. `canvas.ts` patches the context prototype to crop via
+`getImageData` first: peak went 7.87GB -> **623MB**, and that path is also 20x faster.
+
+The lesson worth keeping: every wrong hypothesis was tested with Windows RSS, which reports the
+**working set** and read 10-18GB for work the VM does in 623MB. Measure this on the target host.
+
+```bash
+node scripts/bench-free.ts    # accuracy vs ground truth + peak RSS. Run after ANY omr/ change.
+node scripts/mem-profile.ts   # per-phase memory timeline, live-printed so an OOM kill keeps it
+```
+
+Baseline on the reference sheet: 100% pitch, 100% octave, 98.1% rhythm, 100% cảm âm, ~18s.
+
 ## Brand
 
 The UI is Proxyma's design system, copied as source (tokens in `globals.css`, `tailwind.config.ts`,

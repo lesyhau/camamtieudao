@@ -38,6 +38,55 @@ export type ImageData = NapiImageData;
 export const ImageData = NapiImageData;
 
 /**
+ * THE MEMORY BUG. Cropping a sub-rect out of a large canvas with the 9-argument `drawImage`
+ * leaks a full-size copy of the SOURCE, every single call, and no amount of GC gets it back.
+ *
+ * Measured on the VM, source 2200x3112 (27MB as RGBA), destination 64x64:
+ *
+ *     40 crops via drawImage(bigCanvas, sx,sy,sw,sh, ...)   +1071MB   1126ms
+ *     40 crops via getImageData -> small canvas -> drawImage   +29MB     55ms
+ *
+ * ~27MB per call is exactly one snapshot of the source. One sheet crops ~690 digit cells plus
+ * ~130 lyric strips out of the page canvas, which is ~19GB of snapshots - so the process died
+ * against whatever ceiling it was given: 3.6GB on the 3.9GB VM, 7.87GB on the 7.9GB one,
+ * exactly 3GB under a 3GB cgroup cap. It looked like an allocator sizing itself to the machine.
+ * It was a per-call leak that simply ran until it hit the wall.
+ *
+ * This is why the four earlier suspects were all wrong: the ORT arena, the input-shape count,
+ * the input resolution, and GC pressure. None of them was allocating any of it. It is also why
+ * forcing GC made no difference - the snapshots are native and unreachable from V8.
+ *
+ * The patch goes on the CONTEXT PROTOTYPE rather than at the ~4 call sites so that a re-sync
+ * from jpeditor's OMR (which is browser code, where this defect does not exist) cannot quietly
+ * reintroduce it. The fast path is taken only when it is both safe and worth it - a sub-rect
+ * fully inside a source substantially bigger than the region being read - and everything else
+ * falls through to the original untouched.
+ */
+type DrawArgs = [unknown, ...number[]];
+const ctxProto = Object.getPrototypeOf(napiCreateCanvas(1, 1).getContext("2d")) as {
+  drawImage: (...a: DrawArgs) => void;
+};
+const nativeDrawImage = ctxProto.drawImage;
+
+ctxProto.drawImage = function (this: unknown, ...args: DrawArgs) {
+  const src = args[0] as { width?: number; height?: number; getContext?: unknown } | null;
+  if (args.length === 9 && src && typeof src.getContext === "function") {
+    const [, sx, sy, sw, sh, dx, dy, dw, dh] = args as [unknown, ...number[]];
+    const W = src.width ?? 0, H = src.height ?? 0;
+    // Only when the region is strictly inside the source (a partly-outside read has different
+    // edge semantics, and the callers that do it have already clamped), and only when the
+    // source is big enough relative to the region for a snapshot to be the dominant cost.
+    if (sw >= 1 && sh >= 1 && sx >= 0 && sy >= 0 && sx + sw <= W && sy + sh <= H && W * H > sw * sh * 4) {
+      const region = (src as unknown as Canvas).getContext("2d").getImageData(sx, sy, sw, sh);
+      const tmp = napiCreateCanvas(sw, sh);
+      tmp.getContext("2d").putImageData(region, 0, 0);
+      return nativeDrawImage.call(this, tmp, 0, 0, sw, sh, dx, dy, dw, dh);
+    }
+  }
+  return nativeDrawImage.apply(this, args);
+};
+
+/**
  * Decodes image bytes to a canvas. Replaces `createImageBitmap(new Blob([bytes]))`, which
  * needs a browser. Handles everything @napi-rs/canvas decodes natively - PNG, JPEG, WebP, AVIF.
  */
