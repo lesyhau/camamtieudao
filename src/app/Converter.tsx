@@ -157,45 +157,111 @@ export default function Converter() {
 
   return (
     <>
-      {!preview ? (
-        <button
-          type="button"
-          className={`drop sheet${over ? " over" : ""}`}
-          onClick={() => inputRef.current?.click()}
-          {...dropProps}
-        >
-          <strong>Kéo thả ảnh bản nhạc vào đây</strong>
-          <div className="hint">hoặc bấm để chọn file · PNG, JPEG, WebP · tối đa 20MB</div>
-        </button>
-      ) : (
-        <>
-          <div className={`sheet shown${over ? " over" : ""}`} {...dropProps}>
-            {/* eslint-disable-next-line @next/next/no-img-element -- a blob: URL for the file the
-                user just picked; next/image would need a loader and buys nothing. */}
-            <img src={preview} alt="Ảnh bản nhạc" onClick={() => setZoom(true)} />
+      {/* Three slots - sheet, action, result - laid out by CSS alone.
+          Landscape puts them side by side, portrait stacks them. The result slot always
+          occupies the same box as the sheet, empty or not, so nothing on the page moves when a
+          conversion lands. */}
+      <div className="workspace">
+        <section className="slot slot-sheet" aria-label="Ảnh bản nhạc">
+          {!preview ? (
             <button
               type="button"
-              className="remove"
-              onClick={clear}
-              aria-label="Xoá ảnh"
-              title="Xoá ảnh"
+              className={`drop sheet${over ? " over" : ""}`}
+              onClick={() => inputRef.current?.click()}
+              {...dropProps}
             >
-              {/* Trash glyph, inline so there is no icon dependency for one button. */}
-              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden focusable="false">
-                <path fill="currentColor" d="M9 3h6l1 2h4v2H4V5h4l1-2Zm-3 6h12l-1 12H7L6 9Zm4 2v8h1v-8h-1Zm3 0v8h1v-8h-1Z" />
-              </svg>
+              <strong>Kéo thả ảnh bản nhạc vào đây</strong>
+              <div className="hint">hoặc bấm để chọn file · PNG, JPEG, WebP · tối đa 20MB</div>
             </button>
-          </div>
+          ) : (
+            <>
+              <div className={`sheet shown${over ? " over" : ""}`} {...dropProps}>
+                {/* eslint-disable-next-line @next/next/no-img-element -- a blob: URL for the file
+                    the user just picked; next/image would need a loader and buys nothing. */}
+                <img src={preview} alt="Ảnh bản nhạc" onClick={() => setZoom(true)} />
+                <button type="button" className="remove" onClick={clear} aria-label="Xoá ảnh" title="Xoá ảnh">
+                  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden focusable="false">
+                    <path fill="currentColor" d="M9 3h6l1 2h4v2H4V5h4l1-2Zm-3 6h12l-1 12H7L6 9Zm4 2v8h1v-8h-1Zm3 0v8h1v-8h-1Z" />
+                  </svg>
+                </button>
+              </div>
+              <div className="sheet-meta">
+                <span className="replace">Kéo thả ảnh khác vào để thay thế</span>
+                <span className="fileinfo">
+                  {file?.name}{file ? ` · ${(file.size / 1024 / 1024).toFixed(1)} MB` : null}
+                </span>
+              </div>
+            </>
+          )}
+        </section>
 
-          <div className="sheet-meta">
-            <span className="replace">Kéo thả ảnh khác vào để thay thế</span>
-            <span className="fileinfo">
-              {file?.name}
-              {file ? ` · ${(file.size / 1024 / 1024).toFixed(1)} MB` : null}
-            </span>
+        <section className="slot slot-action">
+          <button className="primary" onClick={convert} disabled={!file || busy}>
+            {phase === "uploading" ? `Đang tải lên… ${pct}%`
+              : phase === "converting" ? "Đang đọc…"
+              : "Chuyển thành cảm âm"}
+          </button>
+          {busy && (
+            <div className="bar" role="progressbar" aria-valuenow={phase === "uploading" ? pct : undefined}>
+              {/* Upload has a real percentage; conversion has none to report, so it sweeps
+                  rather than showing a bar that pretends to know. */}
+              <div className={phase === "uploading" ? "fill" : "fill sweep"}
+                   style={phase === "uploading" ? { width: `${pct}%` } : undefined} />
+            </div>
+          )}
+          {phase === "converting" && <span className="meta">10–30 giây</span>}
+        </section>
+
+        <section className="slot slot-result" aria-label="Kết quả">
+          <div className="sheet result-box">
+            {error ? (
+              <div className="error">{error}</div>
+            ) : doc ? (
+              <div className="result">
+                <h2>{doc.title || "Bản nhạc"}</h2>
+                <p className="stats">
+                  {doc.key.jianpu} · {doc.meter.beats}/{doc.meter.beatType} ·{" "}
+                  {doc.notes.length} nốt · {doc.measures.length} ô nhịp · {doc.lines.length} dòng
+                  {result ? ` · ${(result.ms / 1000).toFixed(0)}s` : null}
+                </p>
+                <div className="controls">
+                  <div className="group">
+                    <span className="label">Cách bấm</span>
+                    {Object.entries(doc.mappings).map(([id, m]) => (
+                      <button key={id} className="ghost sm" aria-pressed={id === active} onClick={() => setMapping(id)}>
+                        {m.label}{id === recommended ? " ✓" : ""}
+                      </button>
+                    ))}
+                  </div>
+                  {doc.verseCount > 1 && (
+                    <div className="group">
+                      <span className="label">Lời</span>
+                      {Array.from({ length: doc.verseCount }, (_, i) => i + 1).map((v) => (
+                        <button key={v} className="ghost sm" aria-pressed={v === verse} onClick={() => setVerse(v)}>
+                          {v}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="group">
+                    <button className="ghost sm" onClick={download}>Tải JSON</button>
+                  </div>
+                </div>
+                <Score doc={doc} mapping={active} verse={verse} />
+              </div>
+            ) : (
+              <div className="placeholder">
+                <svg viewBox="0 0 24 24" width="34" height="34" aria-hidden focusable="false">
+                  <path opacity=".35" fill="none" stroke="currentColor" strokeWidth="1.6"
+                        strokeLinecap="round" strokeLinejoin="round"
+                        d="M9 18V5l12-2v13M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm12-2a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                </svg>
+                <p>Cảm âm sẽ hiện ở đây</p>
+              </div>
+            )}
           </div>
-        </>
-      )}
+        </section>
+      </div>
 
       <input
         ref={inputRef}
@@ -205,67 +271,10 @@ export default function Converter() {
         onChange={(e) => { choose(e.target.files?.[0] ?? null); e.target.value = ""; }}
       />
 
-      <div className="row">
-        <button className="primary" onClick={convert} disabled={!file || busy}>
-          {phase === "uploading" ? `Đang tải lên… ${pct}%`
-            : phase === "converting" ? "Đang đọc bản nhạc…"
-            : "Chuyển thành cảm âm"}
-        </button>
-        {phase === "converting" && <span className="meta">Mất khoảng 10–30 giây.</span>}
-      </div>
-
-      {busy && (
-        <div className="bar" role="progressbar" aria-valuenow={phase === "uploading" ? pct : undefined}>
-          {/* Upload has a real percentage; conversion has no progress to report, so it gets an
-              indeterminate sweep rather than a bar that pretends to know. */}
-          <div className={phase === "uploading" ? "fill" : "fill sweep"}
-               style={phase === "uploading" ? { width: `${pct}%` } : undefined} />
-        </div>
-      )}
-
-      {error && <div className="error">{error}</div>}
-
       {zoom && preview && (
         <div className="lightbox" onClick={() => setZoom(false)} role="presentation">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={preview} alt="Ảnh bản nhạc phóng to" onClick={(e) => e.stopPropagation()} />
-        </div>
-      )}
-
-      {doc && (
-        <div className="result">
-          <h2>{doc.title || "Bản nhạc"}</h2>
-          <p className="stats">
-            {doc.key.jianpu} · {doc.meter.beats}/{doc.meter.beatType} ·{" "}
-            {doc.notes.length} nốt · {doc.measures.length} ô nhịp · {doc.lines.length} dòng
-            {result ? ` · ${(result.ms / 1000).toFixed(0)}s` : null}
-          </p>
-
-          <div className="controls">
-            <div className="group">
-              <span className="label">Cách bấm</span>
-              {Object.entries(doc.mappings).map(([id, m]) => (
-                <button key={id} className="ghost" aria-pressed={id === active} onClick={() => setMapping(id)}>
-                  {m.label}{id === recommended ? " ✓" : ""}
-                </button>
-              ))}
-            </div>
-            {doc.verseCount > 1 && (
-              <div className="group">
-                <span className="label">Lời</span>
-                {Array.from({ length: doc.verseCount }, (_, i) => i + 1).map((v) => (
-                  <button key={v} className="ghost" aria-pressed={v === verse} onClick={() => setVerse(v)}>
-                    Lời {v}
-                  </button>
-                ))}
-              </div>
-            )}
-            <div className="group">
-              <button className="ghost" onClick={download}>Tải JSON</button>
-            </div>
-          </div>
-
-          <Score doc={doc} mapping={active} verse={verse} />
         </div>
       )}
     </>
