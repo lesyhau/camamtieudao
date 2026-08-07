@@ -9,43 +9,64 @@
 // Both <img> are in the DOM with one hidden per mode, so the mark is correct on FIRST PAINT.
 // Choosing the src in JavaScript would mean the pre-paint mode script and React disagreeing for
 // a frame, which is a visible flash of the wrong-coloured logo on every load.
-export function BrandLogo({ size = 28, className = '' }: { size?: number; className?: string }) {
-  const common = 'block object-contain'
+/**
+ * The mark alone. `size` is a CSS length, defaulting to the height of the lockup's text stack.
+ *
+ * It has to be an explicit height. `align-self: stretch` looks like the right answer and is
+ * not: a flex line's cross size is the largest item's HYPOTHETICAL cross size, and for a
+ * replaced element that is its intrinsic height - so a 256px PNG sets the row to 256px tall and
+ * then dutifully stretches to fill it. Measured exactly that before pinning the height.
+ */
+export function BrandLogo({ size = LOCKUP_H, className = '' }: { size?: string; className?: string }) {
+  const common = 'block aspect-square object-contain'
   return (
     <>
-      <img
-        src="/logo-dark.png"
-        alt=""
-        width={size}
-        height={size}
-        aria-hidden="true"
-        className={`hidden dark:block ${common} ${className}`}
-      />
-      <img
-        src="/logo-light.png"
-        alt=""
-        width={size}
-        height={size}
-        aria-hidden="true"
-        className={`dark:hidden ${common} ${className}`}
-      />
+      <img src="/logo-dark.png" alt="" aria-hidden="true" style={{ height: size }} className={`hidden dark:block ${common} ${className}`} />
+      <img src="/logo-light.png" alt="" aria-hidden="true" style={{ height: size }} className={`dark:hidden ${common} ${className}`} />
     </>
   )
 }
 
-/** Mark + wordmark, linking home. The one place the site's name is spelled. */
-export function BrandLockup({ size = 28, text = 'text-base' }: { size?: number; text?: string }) {
+/**
+ * Height of the lockup's two text lines, which is the mark's height.
+ *
+ *   name    text-base, leading-tight -> 16 x 1.25 = 20px
+ *   tagline text-xs,   leading-tight -> 12 x 1.25 = 15px
+ *                                                  ----
+ *                                                   35px
+ *
+ * Written as the arithmetic rather than as `35px` so the two type sizes it depends on are
+ * visible here. Change either and this changes with it; ui3.mjs asserts the mark and the text
+ * stack measure the same.
+ */
+const LOCKUP_H = 'calc(1.25 * 16px + 1.25 * 12px)'
+
+/**
+ * Mark + name + tagline, linking home. The one place the site's name is spelled, used by both
+ * the header and the footer so they cannot drift apart.
+ *
+ * The mark's height is not a number. `items-stretch` on the row plus `h-full` on the images
+ * makes it exactly as tall as the text column beside it - name line + gap + tagline line -
+ * and `aspect-square` takes the width from that height. Pick a different type size and the
+ * mark re-sizes with it; there is no constant to keep in sync and nothing to re-measure.
+ */
+export function BrandLockup({ text = 'text-base' }: { text?: string }) {
   return (
     <a
       href="/"
-      className="flex items-center gap-2 no-underline hover:opacity-80 transition-opacity focus-ring rounded-sm"
+      className="inline-flex items-center gap-2.5 no-underline hover:opacity-80 transition-opacity focus-ring rounded-sm"
     >
-      <BrandLogo size={size} />
-      {/* Arial, like everything else - see tailwind.config.ts. Proxyma's Orbitron cannot spell
-          this name: Google publishes it with the `latin` subset only, so every diacritic in
-          "Cảm âm Tiêu Dao" would fall back and the wordmark would render in two typefaces. */}
-      <span className={`font-brand font-bold text-brand-legible tracking-[0.04em] ${text}`}>
-        Cảm âm Tiêu Dao
+      <BrandLogo />
+      <span className="flex flex-col items-start min-w-0">
+        {/* Arial, like everything else - see tailwind.config.ts. Proxyma's Orbitron cannot spell
+            this name: Google publishes it with the `latin` subset only, so every diacritic in
+            "Cảm âm Tiêu Dao" would fall back and the wordmark would render in two typefaces. */}
+        <span className={`font-brand font-bold text-brand-legible tracking-[0.04em] leading-tight ${text}`}>
+          Cảm âm Tiêu Dao
+        </span>
+        <span className="text-xs text-ink-caption leading-tight truncate">
+          Cảm âm nhạc Hoa chất lượng cao
+        </span>
       </span>
     </a>
   )

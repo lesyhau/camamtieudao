@@ -116,8 +116,14 @@
 }
 
 @layer base {
+  /* 14px is the base, inherited rather than re-declared on every element.
+     THREE SIZES, and no others: 12 (text-xs), 14 (text-sm), 16 (text-base) - Proxyma's own
+     `xs`/`sm`/`base` steps with its line heights, which is what its app actually uses (425
+     text-xs and 196 text-sm against 12 text-base across its whole frontend). The larger steps
+     stay defined in tailwind.config.ts so a component pasted over from Proxyma still resolves,
+     but nothing here should reach for them. */
   body {
-    @apply bg-canvas text-ink-secondary font-ui;
+    @apply bg-canvas text-ink-secondary font-ui text-sm;
     -webkit-font-smoothing: antialiased;
   }
 
@@ -216,8 +222,8 @@
 
 /* The fragment supplies its own <h1>; matches LegalH1 so a manual's title sits at the same
    size and rhythm as a legal page's. */
-.docs-prose h1 { @apply text-3xl font-bold mb-2; }
-.docs-prose h2 { @apply text-xl font-bold mt-10 mb-3; }
+.docs-prose h1 { @apply text-base font-bold mb-2; }
+.docs-prose h2 { @apply text-base font-bold mt-10 mb-3; }
 .docs-prose h3 { @apply text-base font-semibold mt-6 mb-2; }
 .docs-prose p  { @apply text-ink-secondary text-sm mb-4; }
 .docs-prose ul, .docs-prose ol { @apply pl-5 text-ink-secondary text-sm mb-4 space-y-1.5; }
@@ -263,7 +269,7 @@
 .docs-prose ul.changes li { @apply flex items-start gap-2.5 pl-0; }
 .docs-prose .badge {
   @apply inline-flex shrink-0 items-center rounded-md px-2 py-0.5 mt-0.5
-         text-2xs font-bold uppercase tracking-wider;
+         text-xs font-bold uppercase tracking-wider;
   /* position: static is load-bearing. One of these badges is `class="badge fixed"`, and `fixed` is
      ALSO a Tailwind utility meaning position: fixed - so that badge was being taken out of flow and
      positioned against the viewport, i.e. it vanished from its list item entirely. Every "Fixed"
@@ -286,5 +292,5 @@
 }
 .docs-prose .warn p:last-child { @apply mb-0; }
 .docs-prose .warn .label {
-  @apply block mb-1 text-2xs font-bold uppercase tracking-wider text-warning;
+  @apply block mb-1 text-xs font-bold uppercase tracking-wider text-warning;
 }

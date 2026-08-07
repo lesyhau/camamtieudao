@@ -1,9 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Trash2, Music4, ImageUp, Copy, Check, Loader2, X } from "lucide-react";
+import { Trash2, Languages, ImageUp, Copy, Check, Loader2, X } from "lucide-react";
 import type { CamAmDoc } from "@/lib/camam/types.ts";
-import { Button } from "@/components/ui/Button";
 
 interface Result { doc: CamAmDoc; ms: number }
 
@@ -144,11 +143,12 @@ export default function Converter() {
 
   return (
     <>
-      {/* Three slots - sheet, action, result. Landscape puts them side by side, portrait stacks
-          them, and it is grid alone: no viewport JavaScript, so it is right on first paint. The
-          result slot always occupies the same box as the sheet, empty or not, so nothing moves
-          when a conversion lands. */}
-      <div className="grid gap-5 lg:gap-6 grid-cols-1 lg:grid-cols-[1fr_auto_1fr] items-start">
+      {/* Two slots - sheet and result. There is no action column any more: the result panel IS
+          the button until it has a result to show, which is where you are already looking. That
+          gives both panels the width the middle column used to take, and a tighter gap brings
+          them together. Landscape puts them side by side, portrait stacks them, and it is grid
+          alone - no viewport JavaScript, so it is right on first paint. */}
+      <div className="grid gap-5 lg:gap-4 grid-cols-1 lg:grid-cols-2 items-start">
         <section aria-label="Ảnh bản nhạc" className="min-w-0">
           {!preview ? (
             <button
@@ -213,69 +213,62 @@ export default function Converter() {
           )}
         </section>
 
-        <section className="flex flex-col items-center gap-3 justify-self-center lg:self-center">
-          {/* The app's own Button, at the larger of its two sizes - same shape, font, colour
-              and states as Add Resource, just the size the component provides for a page-level
-              call to action. */}
-          <Button size="md" onClick={convert} disabled={!file || busy}>
-            {phase === "uploading" ? "Đang tải lên…"
-              : phase === "converting" ? "Đang dịch…"
-              : "Dịch"}
-          </Button>
-          {busy && (
-            <>
-              {/* A spinner, not a bar. The upload's percentage was real but over in a moment,
-                  and the read that follows has nothing to report - a bar there could only
-                  pretend to know how far along it was. */}
-              <Loader2
-                size={20}
-                className="animate-spin text-brand-accent"
-                role="status"
-                aria-label="Đang xử lý"
-              />
-              <button
-                type="button"
-                onClick={cancel}
-                className="text-xs font-semibold text-ink-caption hover:text-danger transition-colors focus-ring rounded-sm px-2 py-1"
-              >
-                Hủy
-              </button>
-            </>
-          )}
-        </section>
-
         <section aria-label="Kết quả" className="min-w-0">
           {/* The box scrolls, but the copy button must not scroll with it: the scrolling
               element is the INNER absolute layer, so the button is a sibling of it and stays
               pinned to the corner of the frame. */}
           <div className={`${SHEET} border border-line bg-surface !block overflow-hidden`}>
-            <div className="absolute inset-0 overflow-auto p-4">
-              {error ? (
-                <div className="rounded-md border border-danger bg-danger/10 text-danger text-sm p-3">
-                  {error}
+            {doc && !error ? (
+              <>
+                <div className="absolute inset-0 overflow-auto p-4">
+                  <ResultPanel
+                    doc={doc}
+                    ms={result?.ms}
+                    mapping={active}
+                    recommended={recommended}
+                    setMapping={setMapping}
+                    verse={verse}
+                    setVerse={setVerse}
+                    download={download}
+                  />
                 </div>
-              ) : doc ? (
-                <ResultPanel
-                  doc={doc}
-                  ms={result?.ms}
-                  mapping={active}
-                  recommended={recommended}
-                  setMapping={setMapping}
-                  verse={verse}
-                  setVerse={setVerse}
-                  download={download}
-                />
-              ) : (
-                <div className="h-full flex flex-col items-center justify-center gap-2 text-ink-disabled">
-                  <Music4 size={32} aria-hidden="true" />
-                  <p className="text-sm">Cảm âm sẽ hiện ở đây</p>
-                </div>
-              )}
-            </div>
-            {doc && !error && <CopyButton text={() => toPlainText(doc, active)} />}
-            {/* Only after a conversion lands: asking before the tool has done anything for
-                someone is asking a stranger. */}
-            {doc && !error && support && <SupportCard onClose={() => setSupport(false)} />}
+                <CopyButton text={() => toPlainText(doc, active)} />
+                {/* Only after a conversion lands: asking before the tool has done anything for
+                    someone is asking a stranger. */}
+                {support && <SupportCard onClose={() => setSupport(false)} />}
+              </>
+            ) : (
+              /* The empty result panel is the convert button. One control, in the place the
+                 answer will appear, so the click and its outcome are in the same spot.
+                 Mid-run the same button cancels: the icon becomes the spinner at the same
+                 size, so nothing shifts, and the label becomes Hủy. */
+              <button
+                type="button"
+                onClick={busy ? cancel : convert}
+                disabled={!file && !busy}
+                aria-busy={busy}
+                className={`absolute inset-0 w-full flex flex-col items-center justify-center gap-3 px-6 text-center transition-colors focus-ring ${
+                  busy
+                    ? "text-ink-primary hover:bg-danger/10"
+                    : file
+                      ? "text-brand-legible hover:bg-brand-solid/10"
+                      : "text-ink-disabled cursor-not-allowed"
+                }`}
+              >
+                {busy
+                  ? <Loader2 size={32} className="animate-spin" role="status" aria-hidden="true" />
+                  : <Languages size={32} aria-hidden="true" />}
+                <span className="text-base font-bold">{busy ? "Hủy" : "Dịch"}</span>
+                {!busy && !file && (
+                  <span className="text-xs text-ink-disabled">Chọn ảnh bản nhạc trước</span>
+                )}
+                {error && !busy && (
+                  <span className="mt-2 max-w-xs rounded-md border border-danger bg-danger/10 text-danger text-xs p-2">
+                    {error}
+                  </span>
+                )}
+              </button>
+            )}
           </div>
         </section>
       </div>
@@ -414,7 +407,7 @@ function SupportCard({ onClose }: { onClose: () => void }) {
       </button>
 
       <h3 className="text-sm font-bold text-ink-primary pr-6 mb-1">Ủng hộ Cảm âm Tiêu Dao</h3>
-      <p className="text-2xs text-ink-caption leading-snug mb-2">
+      <p className="text-xs text-ink-caption leading-snug mb-2">
         Công cụ luôn miễn phí. Ủng hộ giúp mình trả tiền máy chủ và làm nó tốt hơn.
       </p>
 
@@ -431,8 +424,8 @@ function SupportCard({ onClose }: { onClose: () => void }) {
       {/* Full width of the QR above it, so the name reads as its caption. */}
       <div className="w-full text-center mt-2">
         <p className="text-xs font-bold text-ink-primary tracking-wide">LE SY HAU</p>
-        <p className="text-2xs text-ink-caption tabular-nums">0181003535874</p>
-        <p className="text-2xs text-ink-disabled">Vietcombank</p>
+        <p className="text-xs text-ink-caption tabular-nums">0181003535874</p>
+        <p className="text-xs text-ink-disabled">Vietcombank</p>
       </div>
     </aside>
   );
@@ -458,7 +451,7 @@ function ResultPanel({ doc, ms, mapping, recommended, setMapping, verse, setVers
   return (
     <div>
       {/* pr-12 keeps a long title clear of the copy button pinned to the corner above it. */}
-      <h2 className="text-lg font-bold text-ink-primary mb-0.5 pr-12">{doc.title || "Bản nhạc"}</h2>
+      <h2 className="text-base font-bold text-ink-primary mb-0.5 pr-12">{doc.title || "Bản nhạc"}</h2>
       <p className="text-xs text-ink-caption mb-4">
         {doc.key.jianpu} · {doc.meter.beats}/{doc.meter.beatType} · {doc.notes.length} nốt ·{" "}
         {doc.measures.length} ô nhịp · {doc.lines.length} dòng
@@ -467,7 +460,7 @@ function ResultPanel({ doc, ms, mapping, recommended, setMapping, verse, setVers
 
       <div className="flex flex-wrap gap-5 mb-5">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-2xs label-upper text-ink-disabled">Cách bấm</span>
+          <span className="text-xs label-upper text-ink-disabled">Cách bấm</span>
           {Object.entries(doc.mappings).map(([id, m]) => (
             <button key={id} onClick={() => setMapping(id)} aria-pressed={id === mapping} className={chip(id === mapping)}>
               {m.label}{id === recommended ? " ✓" : ""}
@@ -476,7 +469,7 @@ function ResultPanel({ doc, ms, mapping, recommended, setMapping, verse, setVers
         </div>
         {doc.verseCount > 1 && (
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-2xs label-upper text-ink-disabled">Lời</span>
+            <span className="text-xs label-upper text-ink-disabled">Lời</span>
             {Array.from({ length: doc.verseCount }, (_, i) => i + 1).map((v) => (
               <button key={v} onClick={() => setVerse(v)} aria-pressed={v === verse} className={chip(v === verse)}>
                 {v}

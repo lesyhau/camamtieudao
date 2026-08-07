@@ -1,7 +1,7 @@
 import { BrandLockup } from '@/components/ui/BrandLogo'
 
 const LINK = 'block text-sm mb-2 text-ink-caption hover:text-ink-primary transition-colors'
-const HEADING = 'text-2xs label-upper text-ink-disabled mb-3'
+const HEADING = 'text-xs label-upper text-ink-disabled mb-3'
 
 // Công cụ / Pháp lý are held back until the pages behind them exist - a footer column of links
 // to nothing is worse than a shorter footer. Hỗ trợ is the one that resolves today.
@@ -15,10 +15,9 @@ export function Footer() {
       <div className="max-w-5xl mx-auto">
         <div className="flex flex-wrap justify-between gap-10 mb-10">
           <div className="max-w-xs">
-            {/* Tight against the wordmark: the tagline is the lockup's second line, not a
-                separate paragraph that happens to sit nearby. */}
-            <BrandLockup size={32} text="text-lg" />
-            <p className="text-sm text-ink-caption mt-1">Cảm âm nhạc Hoa chất lượng cao</p>
+            {/* The same lockup as the header - the tagline is the block's second line, not a
+                paragraph that happens to sit nearby. */}
+            <BrandLockup />
           </div>
 
           <div className="flex flex-wrap gap-12">

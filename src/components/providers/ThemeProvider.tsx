@@ -33,6 +33,23 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setMode(current === 'light' ? 'light' : 'dark')
   }, [])
 
+  // Keep the tab icon on the same ink as the mark in the page. The <link media> queries in the
+  // metadata follow the OS preference, which is right before any script runs - but they cannot
+  // see this site's own toggle, so switching to light on a dark-themed OS would leave a pale
+  // icon on the tab.
+  //
+  // This RE-AIMS each link's media query instead of rewriting hrefs or removing nodes: React
+  // owns those elements and re-inserts them, and an earlier version that set href left a third
+  // link still carrying `(prefers-color-scheme: light)` and winning on a light-themed OS.
+  // Keying on the href each link already has is idempotent and survives however many React
+  // decides to render.
+  useEffect(() => {
+    for (const link of document.querySelectorAll<HTMLLinkElement>('link[rel="icon"]')) {
+      const wanted = link.getAttribute('href')?.includes(`icon-${mode}`)
+      link.media = wanted ? 'all' : 'not all'
+    }
+  }, [mode])
+
   const toggle = useCallback(() => {
     setMode(prev => {
       const next: Mode = prev === 'dark' ? 'light' : 'dark'

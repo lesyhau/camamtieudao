@@ -11,6 +11,17 @@ import "./globals.css";
 export const metadata = {
   title: "Cảm âm Tiêu Dao",
   description: "Cảm âm nhạc Hoa chất lượng cao. Đọc giản phổ (简谱) từ ảnh và dịch sang cảm âm cho sáo, tiêu.",
+  // The tab icon is the same two inks as the mark in the page, not a third compromise colour.
+  // Declared here rather than as src/app/icon.png because a file-based icon is a single file
+  // with no way to express a mode. `media` covers the OS preference before any script runs;
+  // ThemeProvider re-points these when the site's own toggle moves, which the OS query cannot
+  // see. Both are listed so a browser that ignores `media` still gets a working icon.
+  icons: {
+    icon: [
+      { url: "/icon-light.png", media: "(prefers-color-scheme: light)", type: "image/png" },
+      { url: "/icon-dark.png", media: "(prefers-color-scheme: dark)", type: "image/png" },
+    ],
+  },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

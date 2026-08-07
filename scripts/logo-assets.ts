@@ -87,19 +87,26 @@ function resize(src: Canvas, size: number): Canvas {
 // wordmark beside it rather than a near-miss.
 const INK_DARK: [number, number, number] = [204, 232, 242];  // dark mode
 const INK_LIGHT: [number, number, number] = [22, 78, 99];    // light mode
-// The favicon has no mode to read: browser tab strips are dark on some platforms and light on
-// others. brand-solid is the one step with usable contrast against both.
-const INK_ICON: [number, number, number] = [32, 111, 141];
 
 const src = new URL("logo.png", root);
 
-// Header renders at 28px, footer at 32px; 256 covers 3x displays with room to spare.
+// The lockup sizes the mark from the type beside it, so its rendered height is around 35px;
+// 256 covers 3x displays with room to spare.
+//
+// The favicons are the SAME two inks as the in-page mark, not a third compromise colour. A tab
+// icon cannot read the site's own toggle, so the pair is selected by `prefers-color-scheme` in
+// the metadata and re-pointed by ThemeProvider when the toggle moves - see src/app/layout.tsx.
 const OUT: Array<[string, [number, number, number], number, number]> = [
   ["public/logo.png", [17, 24, 26], 512, 0.06],        // neutral master: OG images, share cards
   ["public/logo-dark.png", INK_DARK, 256, 0.06],
   ["public/logo-light.png", INK_LIGHT, 256, 0.06],
-  ["src/app/icon.png", INK_ICON, 256, 0.06],
-  ["src/app/apple-icon.png", INK_ICON, 180, 0.14],     // iOS crops to a rounded square: more air
+  // Favicons get more air than the header mark: a tab strip crops tight and sits the icon
+  // against browser chrome rather than the page.
+  ["public/icon-dark.png", INK_DARK, 256, 0.14],
+  ["public/icon-light.png", INK_LIGHT, 256, 0.14],
+  // iOS has no dark variant for a home-screen icon and composites onto an unknown wallpaper,
+  // so this one keeps the mid-tone brand-solid that holds against either.
+  ["src/app/apple-icon.png", [32, 111, 141], 180, 0.14],
 ];
 
 for (const [path, ink, size, pad] of OUT) {

@@ -16,17 +16,9 @@ export function Navbar() {
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 glass border-b border-line">
       <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between gap-6">
-        <div className="flex items-center gap-3 min-w-0">
-          <BrandLockup size={28} />
-          {/* The tagline you were considering for the header. It reads as a strapline beside
-              the wordmark rather than a second heading, so it takes the caption weight and a
-              divider. Hidden below `md` - on a phone it would either wrap the bar to two lines
-              or squeeze the wordmark. Delete this span if you decide against it. */}
-          <span className="hidden md:flex items-center gap-3 text-sm text-ink-caption truncate">
-            <span aria-hidden="true" className="w-px h-4 bg-line" />
-            Cảm âm nhạc Hoa chất lượng cao
-          </span>
-        </div>
+        {/* The tagline is inside the lockup now, stacked under the name - so the header and
+            the footer carry the identical block, mark included. */}
+        <BrandLockup />
         <ThemeToggle />
       </div>
     </nav>
