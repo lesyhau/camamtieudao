@@ -125,7 +125,12 @@ fi
 
 # --- 3. Build and start -------------------------------------------------------
 say "[3/4] Building the runtime image"
-$DOCKER compose build
+# Next stamps a unique .next/BUILD_ID per build; passing it as a build arg makes the COPY layer
+# invalidate exactly when the application changes. Without it Docker reported the COPY as CACHED
+# across different payloads and the container went on serving an older build.
+APP_REV="$(cat app/.next/BUILD_ID 2>/dev/null || date +%s)"
+echo "  app revision: $APP_REV"
+$DOCKER compose build --build-arg "APP_REV=$APP_REV"
 
 say "[4/4] Starting"
 $DOCKER compose up -d --remove-orphans

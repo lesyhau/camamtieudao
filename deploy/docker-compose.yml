@@ -22,7 +22,10 @@ name: camamtieudao
 services:
 
   app:
-    build: .
+    build:
+      context: .
+      args:
+        APP_REV: ${APP_REV:-unknown}
     image: ${CAMAM_IMAGE:-camamtieudao/app:latest}
     restart: unless-stopped
     ports:

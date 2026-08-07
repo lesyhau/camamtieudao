@@ -34,6 +34,15 @@ ENV NODE_ENV=production \
 
 WORKDIR /app
 
+# Identifies this build of the application. Next writes a fresh .next/BUILD_ID per build, and
+# install.sh passes it in, so this layer changes exactly when the app does.
+#
+# Without it the COPY below was reported CACHED across genuinely different payloads and the
+# container kept serving an older build - the deploy looked green, the site did not change,
+# and the only way to see it was to diff the served CSS against the payload on disk.
+ARG APP_REV=unknown
+RUN echo "build ${APP_REV}" > /app/.build-rev
+
 # node:slim already ships an unprivileged `node` user (uid 1000). Nothing here is written
 # at runtime - the app holds no state on disk - so the whole tree can stay read-only to it.
 COPY --chown=node:node app/ ./
