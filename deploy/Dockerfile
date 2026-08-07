@@ -10,11 +10,23 @@
 #   app/           .next/standalone  (server.js + only the deps actually reached)
 #   app/.next/static
 #   app/public
-FROM node:22-alpine
+# Debian (glibc), NOT alpine (musl). Two reasons, and the first is fatal:
+#
+#   onnxruntime-node publishes no musl build at all, so the OCR runtime cannot load on alpine.
+#
+#   And the payload's node_modules is produced by `npm ci` on the ubuntu CI runner, so its
+#   optional platform packages are the glibc ones. On alpine that surfaced as
+#   "Cannot find module './skia.linux-x64-musl.node'" - a missing file whose name is the only
+#   clue that the libc, not the package, was wrong.
+#
+# Alpine was chosen for size. Correctness wins; slim is not much larger.
+FROM node:22-slim
 
 # dumb-init reaps the zombies a Node process left as PID 1 accumulates, and turns SIGTERM
 # into a clean shutdown instead of a 10-second wait for docker to lose patience.
-RUN apk add --no-cache dumb-init
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends dumb-init \
+ && rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production \
     PORT=4249 \
@@ -22,7 +34,7 @@ ENV NODE_ENV=production \
 
 WORKDIR /app
 
-# node:alpine already ships an unprivileged `node` user (uid 1000). Nothing here is written
+# node:slim already ships an unprivileged `node` user (uid 1000). Nothing here is written
 # at runtime - the app holds no state on disk - so the whole tree can stay read-only to it.
 COPY --chown=node:node app/ ./
 
