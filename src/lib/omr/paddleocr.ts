@@ -14,16 +14,43 @@ import { rright, rbottom } from "./types.ts";
 // 合法资源 URL。**不能**把这两个文件放 /public 再用 wasmPaths 字符串——onnxruntime-web 会对
 // 其中的 .mjs 做动态 import()，而 Vite dev 拒绝把 /public 文件当模块加载。
 import { OffscreenCanvas, ImageData } from "./canvas.ts";
+import { existsSync } from "node:fs";
 
-// Models load from disk, not from a URL. OMR_MODEL_DIR lets the deployed image point at a
-// path outside the bundle; the default is the repo's own copy.
-// Resolved at runtime from cwd, NOT via `new URL(..., import.meta.url)`: webpack treats that
-// pattern as a static asset import and tries to bundle the directory, which fails the build.
-// The deploy payload places models/ beside server.js, so cwd is right in the container too.
-const MODEL_DIR = process.env.OMR_MODEL_DIR ?? `${process.cwd()}/models`;
-const REC_URL = `${MODEL_DIR}/ch_PP-OCRv6_small_rec_infer.onnx`;
-const DICT_URL = `${MODEL_DIR}/ppocrv6_dict.txt`;
-const DET_URL = `${MODEL_DIR}/ch_PP-OCRv4_det_infer.onnx`;
+// Models load from disk, not from a URL, and the directory is resolved at runtime.
+//
+// NOT via `new URL(..., import.meta.url)`: webpack treats that pattern as
+// a static asset import and tries to bundle the whole directory, which fails the build.
+//
+// Next's standalone server chdir's to its OWN directory on startup, so cwd is .next/standalone
+// rather than wherever node was launched. The deploy payload puts models/ beside server.js for
+// exactly that reason. Candidates cover the container, a local standalone run from the repo,
+// and `next dev`.
+const MODEL_CANDIDATES = [
+  process.env.OMR_MODEL_DIR,
+  `${process.cwd()}/models`,
+  `${process.cwd()}/../../models`,
+].filter((x): x is string => !!x);
+
+let _modelDir: string | null = null;
+function modelDir(): string {
+  if (_modelDir) return _modelDir;
+  // Synchronous on purpose: this runs once, before any inference, and an async probe would
+  // have to be threaded through every caller for no benefit.
+  for (const dir of MODEL_CANDIDATES) {
+    if (existsSync(`${dir}/ppocrv6_dict.txt`)) { _modelDir = dir; return dir; }
+  }
+  // Naming what was looked for, because the alternative is an ENOENT on a dictionary file
+  // surfacing to the user as "we could not read your sheet".
+  throw new Error(
+    "OCR models not found. Looked in: " + MODEL_CANDIDATES.join(", ") +
+    ". Set OMR_MODEL_DIR, or copy models/ beside the server entry point.",
+  );
+}
+
+const REC_NAME = "ch_PP-OCRv6_small_rec_infer.onnx";
+const DICT_NAME = "ppocrv6_dict.txt";
+const DET_NAME = "ch_PP-OCRv4_det_infer.onnx";
+
 
 const REC_H = 48, REC_MAXW = 320, REC_MAXW_LONG = 2048;
 
@@ -176,7 +203,7 @@ async function runRecArgmaxMany(inputs: { chw: Float32Array; dims: number[] }[])
 
 /** 单线程建 rec session（回退用，必定可用）。 */
 async function createRecSingle(): Promise<unknown> {
-  return _ort.InferenceSession.create(REC_URL, { executionProviders: ["cpu"] });
+  return _ort.InferenceSession.create(`${modelDir()}/${REC_NAME}`, { executionProviders: ["cpu"] });
 }
 
 /** 按期望线程数建 rec session。多线程下额外做一次极小 warmup run 确认 worker 池真能响应
@@ -197,7 +224,7 @@ async function ensureSession(): Promise<void> {
   if (_initPromise) return _initPromise;
   _initPromise = (async () => {
     // 字典两端都要（CTC 解码在前端）。PaddleOCR CTC 字符表：index0=blank，随后字典，末尾可能补 space。
-    const dictText = await (await import("node:fs/promises")).readFile(DICT_URL, "utf8");
+    const dictText = await (await import("node:fs/promises")).readFile(`${modelDir()}/${DICT_NAME}`, "utf8");
     _chars = ["", ...dictText.split("\n").filter((l) => l.length)];
     if (nativeOcr()) { _ready = true; return; } // 原生(Tauri)：推理在 Rust，无需加载 ort-web
     // 浏览器：纯 wasm 构建（非 jsep/webgpu），只需 ort-wasm-simd-threaded.wasm，省去 26MB jsep。
@@ -215,7 +242,7 @@ async function ensureDetSession(): Promise<void> {
   if (nativeOcr() || _detSession) return;
   if (_detInitPromise) return _detInitPromise;
   _detInitPromise = (async () => {
-    _detSession = await _ort.InferenceSession.create(DET_URL, { executionProviders: ["cpu"] });
+    _detSession = await _ort.InferenceSession.create(`${modelDir()}/${DET_NAME}`, { executionProviders: ["cpu"] });
   })();
   return _detInitPromise;
 }

@@ -1,0 +1,115 @@
+:root {
+  --bg: #fbfaf7;
+  --fg: #1c1a17;
+  --muted: #6b6459;
+  --line: #e3ded4;
+  --accent: #8a5a2b;
+  --accent-soft: #f3ebe0;
+  --danger: #a33a2a;
+  --radius: 10px;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #171614;
+    --fg: #ece7df;
+    --muted: #9a9187;
+    --line: #322e29;
+    --accent: #d9a066;
+    --accent-soft: #2a241d;
+    --danger: #e08472;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+main { max-width: 66rem; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
+
+h1 { font-size: 1.6rem; margin: 0 0 .3rem; letter-spacing: -.01em; }
+.sub { color: var(--muted); margin: 0 0 2rem; }
+
+/* ---------------------------------------------------------------- dropzone */
+.drop {
+  border: 2px dashed var(--line);
+  border-radius: var(--radius);
+  padding: 2.75rem 1.5rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+  background: transparent;
+  width: 100%;
+  color: inherit;
+  font: inherit;
+}
+.drop:hover, .drop:focus-visible { border-color: var(--accent); }
+.drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.drop .hint { color: var(--muted); font-size: .9rem; margin-top: .4rem; }
+
+.preview { display: flex; gap: 1rem; align-items: center; margin-top: 1rem; }
+.preview img {
+  max-width: 140px; max-height: 180px; border-radius: 6px;
+  border: 1px solid var(--line); object-fit: contain; background: #fff;
+}
+.preview .meta { font-size: .9rem; color: var(--muted); }
+
+.row { display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; margin-top: 1.25rem; }
+
+button.primary {
+  background: var(--accent); color: #fff; border: 0;
+  padding: .6rem 1.4rem; border-radius: var(--radius);
+  font: inherit; font-weight: 600; cursor: pointer;
+}
+button.primary:disabled { opacity: .5; cursor: default; }
+button.ghost {
+  background: transparent; color: var(--fg); border: 1px solid var(--line);
+  padding: .45rem 1rem; border-radius: var(--radius); font: inherit; cursor: pointer;
+}
+button.ghost[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+
+.error {
+  margin-top: 1rem; padding: .75rem 1rem; border-radius: var(--radius);
+  border: 1px solid var(--danger); color: var(--danger); font-size: .95rem;
+}
+
+/* ---------------------------------------------------------------- results */
+.result { margin-top: 2.5rem; border-top: 1px solid var(--line); padding-top: 1.75rem; }
+.result h2 { margin: 0 0 .2rem; font-size: 1.3rem; }
+.result .stats { color: var(--muted); font-size: .9rem; margin: 0 0 1.25rem; }
+
+.controls { display: flex; gap: 1.25rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+.controls .group { display: flex; gap: .4rem; align-items: center; flex-wrap: wrap; }
+.controls .label { font-size: .82rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+
+/* A system of music. Notes wrap; each note keeps its syllable beneath it, which is the whole
+   reason this is a grid and not the parenthesised text the chat bot has to send. */
+.system { margin-bottom: 1.4rem; }
+.notes { display: flex; flex-wrap: wrap; gap: .1rem .55rem; align-items: flex-end; }
+
+.note { display: flex; flex-direction: column; align-items: center; min-width: 1.5rem; }
+.note .name { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.note .syl { font-size: .82rem; color: var(--muted); min-height: 1.2em; white-space: nowrap; }
+.note.rest .name { color: var(--muted); }
+
+.bar { align-self: stretch; width: 1px; background: var(--line); margin: 0 .3rem; }
+
+/* Octave shown by weight as well as case, so it survives being read quickly. */
+.note .name.up1 { font-weight: 600; }
+.note .name.up2 { font-weight: 700; color: var(--accent); }
+
+.plain {
+  white-space: pre-wrap; word-break: break-word;
+  font: .92rem/1.7 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: var(--accent-soft); border-radius: var(--radius); padding: 1rem;
+}
+
+footer { margin-top: 3rem; color: var(--muted); font-size: .85rem; }
+footer a { color: inherit; }

@@ -1,12 +1,17 @@
-// Placeholder shell. The chat interface and the attach button land in M3; this exists so the
-// standalone build has a page to emit and the deploy path can be exercised end to end before
-// there is a UI to deploy.
+import Converter from "./Converter.tsx";
+
 export default function Home() {
   return (
-    <main style={{ fontFamily: "system-ui, sans-serif", maxWidth: 640, margin: "4rem auto", padding: "0 1rem" }}>
+    <main>
       <h1>Cảm Âm Tiêu Dao</h1>
-      <p>Chuyển giản phổ (简谱) từ ảnh sang cảm âm.</p>
-      <p style={{ opacity: 0.6 }}>Giao diện chat đang được xây dựng.</p>
+      <p className="sub">
+        Tải ảnh bản nhạc số (giản phổ) lên, nhận lại cảm âm cho sáo và tiêu.
+      </p>
+      <Converter />
+      <footer>
+        Đọc ảnh hoàn toàn trên máy chủ của chúng tôi, không gửi đi đâu khác.
+        Ảnh chụp rõ, đủ sáng và thẳng góc sẽ cho kết quả tốt nhất.
+      </footer>
     </main>
   );
 }
