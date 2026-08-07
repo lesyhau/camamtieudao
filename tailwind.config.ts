@@ -80,15 +80,21 @@ export default {
         sweep: 'sweep 1.1s ease-in-out infinite',
       },
 
+      // Arial, everywhere. It is a system font, so nothing is downloaded and there is no
+      // swap - text is in its final face on the first frame.
+      //
+      // The fallbacks are the two faces metrically identical to Arial: Liberation Sans is what
+      // Linux ships in its place (Android resolves to Roboto), Helvetica what older macOS
+      // does. All of them carry Vietnamese, which is the constraint that ruled out Orbitron
+      // for the wordmark.
+      //
+      // `grotesk` and `brand` are kept as aliases rather than renamed at every call site,
+      // because they name the ROLE (body face / wordmark face) in code copied from Proxyma.
+      // They now resolve to the same stack as `ui`.
       fontFamily: {
-        ui:       ['var(--font-grotesk)', 'system-ui', 'sans-serif'],
-        // Alias kept so existing `font-grotesk` call sites resolve to the same stack.
-        grotesk:  ['var(--font-grotesk)', 'system-ui', 'sans-serif'],
-        // The wordmark. Proxyma sets its own in Orbitron, which Google publishes with the
-        // `latin` subset ONLY - every diacritic in "Cảm âm Tiêu Dao" would drop to a fallback
-        // face and the wordmark would render in two typefaces. Space Grotesk carries
-        // `vietnamese`, so it is the only one of the two that can spell the name.
-        brand:    ['var(--font-grotesk)', 'system-ui', 'sans-serif'],
+        ui:       ['Arial', 'Liberation Sans', 'Helvetica', 'sans-serif'],
+        grotesk:  ['Arial', 'Liberation Sans', 'Helvetica', 'sans-serif'],
+        brand:    ['Arial', 'Liberation Sans', 'Helvetica', 'sans-serif'],
         mono:     ['Consolas', 'Space Mono', 'Cascadia Code', 'monospace'],
       },
 

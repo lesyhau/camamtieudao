@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Trash2, Music4, ImageUp, Copy, Check } from "lucide-react";
+import { Trash2, Music4, ImageUp, Copy, Check, Loader2, X } from "lucide-react";
 import type { CamAmDoc } from "@/lib/camam/types.ts";
 import { Button } from "@/components/ui/Button";
 
@@ -54,13 +54,13 @@ export default function Converter() {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [phase, setPhase] = useState<"idle" | "uploading" | "converting">("idle");
-  const [pct, setPct] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [over, setOver] = useState(false);
   const [zoom, setZoom] = useState(false);
   const [mapping, setMapping] = useState<string | null>(null);
   const [verse, setVerse] = useState(1);
+  const [support, setSupport] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
   const inflight = useRef<{ xhr?: XMLHttpRequest }>({});
   const busy = phase !== "idle";
@@ -72,7 +72,7 @@ export default function Converter() {
       return;
     }
     inflight.current.xhr?.abort(); // replacing the image abandons what the old one produced
-    setError(null); setResult(null); setPhase("idle"); setPct(0); setFile(f);
+    setError(null); setResult(null); setPhase("idle"); setFile(f);
     setPreview((old) => { if (old) URL.revokeObjectURL(old); return URL.createObjectURL(f); });
   }, []);
 
@@ -81,20 +81,22 @@ export default function Converter() {
     // image to disk - so clearing it here is the whole of "delete it from the server" too.
     inflight.current.xhr?.abort();
     setPreview((old) => { if (old) URL.revokeObjectURL(old); return null; });
-    setFile(null); setResult(null); setError(null); setPhase("idle"); setPct(0); setZoom(false);
+    setFile(null); setResult(null); setError(null); setPhase("idle"); setZoom(false);
   }, []);
+
+  /** Abort the request in flight. The rejection is an AbortError, which convert() ignores. */
+  const cancel = useCallback(() => { inflight.current.xhr?.abort(); }, []);
 
   const convert = useCallback(async () => {
     if (!file) return;
-    setError(null); setResult(null); setPct(0); setPhase("uploading");
+    setError(null); setResult(null); setPhase("uploading");
     try {
       const r = await upload(file, (p) => {
-        setPct(p);
         // Upload finishing is where the wait changes character: the bytes are sent, now the
         // server reads the sheet. Saying so is the difference between "slow" and "stuck".
         if (p >= 100) setPhase("converting");
       }, inflight.current);
-      setResult(r); setMapping(null); setVerse(1);
+      setResult(r); setMapping(null); setVerse(1); setSupport(true);
     } catch (e) {
       if ((e as DOMException)?.name !== "AbortError") {
         setError(e instanceof Error ? e.message : "Chuyển đổi thất bại.");
@@ -128,7 +130,10 @@ export default function Converter() {
     URL.revokeObjectURL(url);
   }, [doc]);
 
-  const dropProps = {
+  // Inert while a conversion is running: swapping the image mid-read would abandon the work
+  // silently, and the drop target highlighting under a disabled delete button reads as a
+  // control that should work.
+  const dropProps = busy ? {} : {
     onDragOver: (e: React.DragEvent) => { e.preventDefault(); setOver(true); },
     onDragLeave: () => setOver(false),
     onDrop: (e: React.DragEvent) => {
@@ -182,21 +187,27 @@ export default function Converter() {
                   onClick={() => setZoom(true)}
                   className="max-w-full max-h-full object-contain cursor-zoom-in block"
                 />
+                {/* Same icon-button shape as ThemeToggle: no fill at rest, a light wash on
+                    hover. NOT the ink-* colours it uses, though - this one sits on top of a
+                    white sheet photograph, where ink-primary in dark mode is near-white and
+                    would vanish. mono-500 is mode-invariant and holds on paper and on the
+                    surface behind it alike. */}
                 <button
                   type="button"
                   onClick={clear}
+                  disabled={busy}
                   aria-label="Xoá ảnh"
-                  title="Xoá ảnh"
-                  className="absolute top-2 left-2 w-9 h-9 rounded-md border border-line bg-canvas/90 text-danger flex items-center justify-center hover:border-danger focus-ring"
+                  title={busy ? "Đang dịch, không xoá được" : "Xoá ảnh"}
+                  className="absolute top-2 right-2 w-9 h-9 rounded-full flex items-center justify-center text-mono-500 hover:bg-mono-500/15 hover:text-danger transition-colors focus-ring disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-mono-500 disabled:cursor-not-allowed"
                 >
                   <Trash2 size={16} aria-hidden="true" />
                 </button>
               </div>
-              <div className="flex justify-between gap-4 flex-wrap mt-2 text-xs text-ink-caption">
-                <span>Kéo thả ảnh khác vào để thay thế</span>
-                <span className="text-right">
+              <div className="mt-2 text-xs">
+                <p className="text-ink-caption truncate">
                   {file?.name}{file ? ` · ${(file.size / 1024 / 1024).toFixed(1)} MB` : null}
-                </span>
+                </p>
+                <p className="text-ink-disabled">Kéo thả ảnh khác vào để thay thế</p>
               </div>
             </>
           )}
@@ -207,25 +218,30 @@ export default function Converter() {
               and states as Add Resource, just the size the component provides for a page-level
               call to action. */}
           <Button size="md" onClick={convert} disabled={!file || busy}>
-            {phase === "uploading" ? `Đang tải lên… ${pct}%`
-              : phase === "converting" ? "Đang đọc…"
+            {phase === "uploading" ? "Đang tải lên…"
+              : phase === "converting" ? "Đang dịch…"
               : "Dịch"}
           </Button>
           {busy && (
-            <div
-              className="w-48 h-1.5 rounded-full bg-surface-alt overflow-hidden"
-              role="progressbar"
-              aria-valuenow={phase === "uploading" ? pct : undefined}
-            >
-              {/* Upload has a real percentage; conversion has none to report, so it sweeps
-                  rather than showing a bar that pretends to know how far along it is. */}
-              <div
-                className={`h-full bg-brand-accent ${phase === "converting" ? "w-1/3 animate-sweep" : ""}`}
-                style={phase === "uploading" ? { width: `${pct}%` } : undefined}
+            <>
+              {/* A spinner, not a bar. The upload's percentage was real but over in a moment,
+                  and the read that follows has nothing to report - a bar there could only
+                  pretend to know how far along it was. */}
+              <Loader2
+                size={20}
+                className="animate-spin text-brand-accent"
+                role="status"
+                aria-label="Đang xử lý"
               />
-            </div>
+              <button
+                type="button"
+                onClick={cancel}
+                className="text-xs font-semibold text-ink-caption hover:text-danger transition-colors focus-ring rounded-sm px-2 py-1"
+              >
+                Hủy
+              </button>
+            </>
           )}
-          {phase === "converting" && <span className="text-xs text-ink-caption">10–30 giây</span>}
         </section>
 
         <section aria-label="Kết quả" className="min-w-0">
@@ -256,8 +272,10 @@ export default function Converter() {
                 </div>
               )}
             </div>
-            {/* Top right, mirroring the delete button on the sheet's top left. */}
             {doc && !error && <CopyButton text={() => toPlainText(doc, active)} />}
+            {/* Only after a conversion lands: asking before the tool has done anything for
+                someone is asking a stranger. */}
+            {doc && !error && support && <SupportCard onClose={() => setSupport(false)} />}
           </div>
         </section>
       </div>
@@ -365,6 +383,58 @@ function CopyButton({ text }: { text: () => string }) {
     >
       {done ? <Check size={16} aria-hidden="true" /> : <Copy size={16} aria-hidden="true" />}
     </button>
+  );
+}
+
+/**
+ * The tip jar, over the lower right of the result.
+ *
+ * The QR is a VietQR/napas payment code, so it is NOT generated here - a wrong CRC or a wrong
+ * account field in a payment code sends someone's money nowhere, and that is not a thing to
+ * reconstruct from a screenshot. It is a file, `public/qr-ung-ho.png`. If that file is missing
+ * the card degrades to the account details in text, which are the same instruction in a slower
+ * form, rather than showing a broken image on a payment prompt.
+ */
+function SupportCard({ onClose }: { onClose: () => void }) {
+  const [qrFailed, setQrFailed] = useState(false);
+
+  return (
+    <aside
+      aria-label="Ủng hộ Cảm âm Tiêu Dao"
+      className="absolute bottom-2 right-2 z-20 w-56 rounded-card border border-line bg-canvas/95 backdrop-blur-md shadow-card-lg p-3"
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Đóng"
+        title="Đóng"
+        className="absolute top-1 right-1 w-7 h-7 rounded-full flex items-center justify-center text-ink-disabled hover:bg-ink-caption/10 hover:text-ink-primary transition-colors focus-ring"
+      >
+        <X size={14} aria-hidden="true" />
+      </button>
+
+      <h3 className="text-sm font-bold text-ink-primary pr-6 mb-1">Ủng hộ Cảm âm Tiêu Dao</h3>
+      <p className="text-2xs text-ink-caption leading-snug mb-2">
+        Công cụ luôn miễn phí. Ủng hộ giúp mình trả tiền máy chủ và làm nó tốt hơn.
+      </p>
+
+      {!qrFailed && (
+        /* eslint-disable-next-line @next/next/no-img-element -- a static asset at a fixed size */
+        <img
+          src="/qr-ung-ho.png"
+          alt="Mã QR chuyển khoản Vietcombank"
+          onError={() => setQrFailed(true)}
+          className="w-full rounded-md bg-white block"
+        />
+      )}
+
+      {/* Full width of the QR above it, so the name reads as its caption. */}
+      <div className="w-full text-center mt-2">
+        <p className="text-xs font-bold text-ink-primary tracking-wide">LE SY HAU</p>
+        <p className="text-2xs text-ink-caption tabular-nums">0181003535874</p>
+        <p className="text-2xs text-ink-disabled">Vietcombank</p>
+      </div>
+    </aside>
   );
 }
 

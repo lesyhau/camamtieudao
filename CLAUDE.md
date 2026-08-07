@@ -171,16 +171,22 @@ Baseline on the reference sheet: 100% pitch, 100% octave, 98.1% rhythm, 100% c�
 ## Brand
 
 The UI is Proxyma's design system, copied as source (tokens in `globals.css`, `tailwind.config.ts`,
-`Button.tsx`, `ThemeToggle`, `SiteBackground`) rather than transcribed. Two deliberate departures:
+`Button.tsx`, `ThemeToggle`, `SiteBackground`) rather than transcribed. Three deliberate departures:
 
-- **The wordmark is Space Grotesk, not Orbitron.** Google publishes Orbitron with the `latin`
-  subset only, so "Cảm âm Tiêu Dao" would lose every diacritic to a fallback face and render in
-  two typefaces. `font-brand` is remapped accordingly; Orbitron is not loaded at all.
+- **The type is Arial**, everywhere including the wordmark. No webfont is loaded, so there is no
+  swap. Proxyma's Orbitron could not have been kept regardless: Google publishes it with the
+  `latin` subset only, so every diacritic in "Cảm âm Tiêu Dao" would drop to a fallback face and
+  the wordmark would render in two typefaces.
 - **The mark is the brush photograph, not a trace of it.** `logo.png` (the artwork, at repo root)
   is the source; `scripts/logo-assets.ts` derives alpha from luminance, trims to the ink, and
   emits one PNG per mode plus the icons. It is not a vector: the dry-brush edge and the speckle
   are the artwork, and a filled path only approximates them. Ink colour is baked per file
   because ink-primary is a different hue in each mode, not an inversion.
+- **`public/qr-ung-ho.png` is not in the repo yet.** It is the VietQR/napas payment code shown
+  by the support card. It is deliberately NOT generated in code: a wrong CRC or account field in
+  a payment code sends someone's money nowhere, so it has to be the real exported image. Until
+  it exists the card degrades to the account details in text, which is correct behaviour, not a
+  placeholder to replace with a fabricated QR.
 
 ## Conventions
 

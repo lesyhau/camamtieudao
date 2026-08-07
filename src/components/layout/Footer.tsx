@@ -15,13 +15,27 @@ export function Footer() {
       <div className="max-w-5xl mx-auto">
         <div className="flex flex-wrap justify-between gap-10 mb-10">
           <div className="max-w-xs">
-            <div className="mb-3">
-              <BrandLockup size={32} text="text-lg" />
-            </div>
-            <p className="text-sm text-ink-caption">Cảm âm nhạc Hoa chất lượng cao</p>
+            {/* Tight against the wordmark: the tagline is the lockup's second line, not a
+                separate paragraph that happens to sit nearby. */}
+            <BrandLockup size={32} text="text-lg" />
+            <p className="text-sm text-ink-caption mt-1">Cảm âm nhạc Hoa chất lượng cao</p>
           </div>
 
           <div className="flex flex-wrap gap-12">
+            <div>
+              <h4 className={HEADING}>Liên kết</h4>
+              {/* rel="noopener" on every target=_blank: without it the opened tab gets a live
+                  window.opener handle back to this page. */}
+              <a href="https://www.youtube.com/@camamtieudao" target="_blank" rel="noopener noreferrer" className={LINK}>
+                YouTube · Cảm âm Tiêu Dao
+              </a>
+              <a href="https://www.youtube.com/@lesyhau" target="_blank" rel="noopener noreferrer" className={LINK}>
+                YouTube · Lê Sỹ Hậu
+              </a>
+              <a href="https://www.facebook.com/le.sy.hau.110994" target="_blank" rel="noopener noreferrer" className={LINK}>
+                Facebook
+              </a>
+            </div>
             <div>
               <h4 className={HEADING}>Hỗ trợ</h4>
               <a href="mailto:camamtieudao@outlook.com" className={LINK}>

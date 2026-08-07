@@ -41,10 +41,10 @@ export function BrandLockup({ size = 28, text = 'text-base' }: { size?: number; 
       className="flex items-center gap-2 no-underline hover:opacity-80 transition-opacity focus-ring rounded-sm"
     >
       <BrandLogo size={size} />
-      {/* Not font-brand/Orbitron: Google publishes Orbitron with the `latin` subset only, so
-          every Vietnamese diacritic in "Cảm âm Tiêu Dao" would fall back to another face and
-          the wordmark would render in two typefaces. Space Grotesk carries `vietnamese`. */}
-      <span className={`font-grotesk font-bold text-brand-legible tracking-[0.04em] ${text}`}>
+      {/* Arial, like everything else - see tailwind.config.ts. Proxyma's Orbitron cannot spell
+          this name: Google publishes it with the `latin` subset only, so every diacritic in
+          "Cảm âm Tiêu Dao" would fall back and the wordmark would render in two typefaces. */}
+      <span className={`font-brand font-bold text-brand-legible tracking-[0.04em] ${text}`}>
         Cảm âm Tiêu Dao
       </span>
     </a>

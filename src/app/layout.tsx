@@ -1,19 +1,12 @@
 import type { ReactNode } from "react";
-import { Space_Grotesk } from "next/font/google";
 import { ThemeProvider, MODE_INIT_SCRIPT } from "@/components/providers/ThemeProvider";
 import { SiteBackground } from "@/components/ui/SiteBackground";
 import "./globals.css";
 
-// Space Grotesk for everything, including the wordmark. Proxyma sets its wordmark in Orbitron,
-// but Google publishes Orbitron with the `latin` subset ONLY - "Cảm âm Tiêu Dao" would lose
-// every diacritic to a fallback face and render in two typefaces. Space Grotesk carries
-// `vietnamese`, so it is the one that can spell the name. next/font self-hosts it: no request
-// to Google at run time.
-const spaceGrotesk = Space_Grotesk({
-  subsets: ["latin", "vietnamese"],
-  variable: "--font-grotesk",
-  display: "swap",
-});
+// No webfont at all - the type is Arial, declared in tailwind.config.ts. Both of Proxyma's
+// faces are gone: Orbitron because Google publishes it `latin`-only and it cannot spell
+// "Cảm âm Tiêu Dao", Space Grotesk because Arial replaces it. Nothing is downloaded, so there
+// is no font swap and text renders in its final face on the first frame.
 
 export const metadata = {
   title: "Cảm âm Tiêu Dao",
@@ -24,12 +17,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   // data-mode is stamped by the inline script below before first paint; the "dark" here is
   // only the pre-script fallback for a browser with JS disabled, matching the :root defaults.
   return (
-    <html
-      lang="vi"
-      data-mode="dark"
-      className={spaceGrotesk.variable}
-      suppressHydrationWarning
-    >
+    <html lang="vi" data-mode="dark" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: MODE_INIT_SCRIPT }} />
       </head>
