@@ -6,9 +6,8 @@ import { Heart, X, ChevronUp } from "lucide-react";
 
 export const SUPPORT_TITLE = "Ủng hộ Cảm âm Tiêu Dao";
 const BLURB =
-  "Cảm âm Tiêu Dao sẽ luôn là một công cụ hoàn toàn miễn phí! Nếu bạn thấy hữu ích, hãy ủng hộ " +
-  "mình chút đỉnh để phụ giúp tiền duy trì máy chủ và tiếp thêm động lực cho mình ra thêm nhiều " +
-  "bản cảm âm mới nhé.";
+  "Cảm âm Tiêu Dao sẽ luôn là một công cụ hoàn toàn miễn phí! Nếu bạn thấy hữu ích, hãy cùng " +
+  "mình duy trì dịch vụ và tiếp thêm động lực cho mình ra thêm nhiều bản cảm âm mới nhé.";
 
 /** The event the footer link fires to open the dialog from anywhere on the page. */
 export const OPEN_SUPPORT = "camam:open-support";

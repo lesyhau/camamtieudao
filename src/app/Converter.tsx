@@ -300,7 +300,7 @@ export default function Converter() {
                       : "text-ink-disabled cursor-not-allowed"
                 }`}
               >
-                {busy && <ConvertingWaves />}
+                {busy && <ConvertingSweep />}
                 {busy
                   ? <Loader2 size={32} className="animate-spin relative" role="status" aria-hidden="true" />
                   : <Languages size={32} aria-hidden="true" />}
@@ -403,44 +403,25 @@ function toPlainText(doc: CamAmDoc, mapping: string): string {
  * holding a stale copy of the score.
  */
 /**
- * The waiting animation: two waves crossing the empty result panel.
+ * The waiting animation: a band of light travelling across the panel, on a loop.
  *
- * A spinner says "something is happening" and nothing else. Twenty seconds of a spinner and a
- * changing label is still twenty seconds of a page that looks frozen between labels, and the
- * conversion's longest stage is the one with the least to report. Slow water underneath gives
- * the wait a pulse without claiming any progress it cannot measure.
+ * It is an indeterminate progress bar's motion - the same sweep, the same admission that there
+ * is no percentage to report - but spread over the whole area rather than squeezed into a strip
+ * of chrome. A spinner alone says "something is happening" and stops there; twenty seconds of
+ * it looks frozen between the stage labels.
  *
- * Each SVG is twice the width of the box and holds TWO periods of the same wave, so sliding it
- * by exactly -50% puts the second period where the first started and the loop never seams. The
- * two layers run at different speeds and opacities, which is what stops it reading as one flat
- * shape sliding past. `prefers-reduced-motion` stops both - see globals.css.
+ * Two bands at different speeds, so the panel breathes rather than pulsing on one beat. Both
+ * are pure gradient: no SVG, nothing to lay out, and the whole thing is two transforms the
+ * compositor can run without touching the main thread while the page is otherwise busy.
  */
-function ConvertingWaves() {
+function ConvertingSweep() {
   return (
-    <div aria-hidden="true" className="absolute inset-x-0 bottom-0 h-2/3 overflow-hidden pointer-events-none">
-      <svg
-        viewBox="0 0 400 60"
-        preserveAspectRatio="none"
-        className="absolute bottom-0 left-0 w-[200%] h-24 animate-wave-slow text-brand-solid/25"
-      >
-        <path fill="currentColor" d={WAVE_D} />
-      </svg>
-      <svg
-        viewBox="0 0 400 60"
-        preserveAspectRatio="none"
-        className="absolute bottom-0 left-0 w-[200%] h-16 animate-wave text-brand-accent/20"
-      >
-        <path fill="currentColor" d={WAVE_D} />
-      </svg>
+    <div aria-hidden="true" className="absolute inset-0 overflow-hidden pointer-events-none rounded-card">
+      <div className="absolute inset-y-0 left-0 w-1/2 animate-sweep-slow bg-gradient-to-r from-transparent via-brand-solid/25 to-transparent" />
+      <div className="absolute inset-y-0 left-0 w-1/2 animate-sweep bg-gradient-to-r from-transparent via-brand-accent/15 to-transparent" />
     </div>
   );
 }
-
-// One period is 200 units wide; the path draws two of them and then closes down to the
-// baseline so it fills rather than strokes.
-const WAVE_D =
-  "M0 30 C 25 12 75 12 100 30 C 125 48 175 48 200 30 " +
-  "C 225 12 275 12 300 30 C 325 48 375 48 400 30 L400 60 L0 60 Z";
 
 function CopyButton({ text }: { text: () => string }) {
   const [done, setDone] = useState(false);

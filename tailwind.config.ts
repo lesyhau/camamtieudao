@@ -74,18 +74,18 @@ export default {
         },
       },
 
-      // The waiting animation. Two wave layers slide at different speeds; each SVG holds TWO
-      // periods of the wave and is twice the width of its box, so translating by exactly -50%
-      // lands the second period where the first began and the loop is seamless.
+      // The waiting animation: an indeterminate progress bar's travelling band, but spread
+      // across the whole panel instead of confined to a 2px strip. The band is half the width
+      // of the box, so -100% parks it fully off the left edge and 200% fully off the right.
       keyframes: {
-        wave: {
-          '0%':   { transform: 'translateX(0)' },
-          '100%': { transform: 'translateX(-50%)' },
+        sweep: {
+          '0%':   { transform: 'translateX(-100%)' },
+          '100%': { transform: 'translateX(200%)' },
         },
       },
       animation: {
-        wave: 'wave 9s linear infinite',
-        'wave-slow': 'wave 15s linear infinite',
+        sweep: 'sweep 2.4s ease-in-out infinite',
+        'sweep-slow': 'sweep 3.8s ease-in-out infinite',
       },
 
       // Inter, everywhere - see src/app/layout.tsx for why it replaced Arial. The fallbacks

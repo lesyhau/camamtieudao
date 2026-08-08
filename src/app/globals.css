@@ -200,11 +200,12 @@
   }
 }
 
-/* Someone who has asked their system for less motion should not get a moving background
-   while they wait. The waves stop; the label and the spinner still say what is happening. */
+/* Someone who has asked their system for less motion should not get a moving background while
+   they wait. The sweep stops and hides rather than freezing mid-pass, which would leave a
+   stray band across the panel. The label and the spinner still say what is happening. */
 @media (prefers-reduced-motion: reduce) {
-  .animate-wave,
-  .animate-wave-slow { animation: none; }
+  .animate-sweep,
+  .animate-sweep-slow { animation: none; opacity: 0; }
 }
 
 /* ================================================================
