@@ -175,12 +175,22 @@ Baseline on the reference sheet: 100% pitch, 100% octave, 98.1% rhythm, 100% cáº
 produced for it. Both sides are parsed by this repo's own reader and compared note for note, so
 the number is a real pitch-stream agreement rather than a text diff.
 
-| image | size | ref | ours | agreement |
-|---|---|---|---|---|
-| input_0.png | 2480x3508 | 419 | 419 | **100.0%** |
-| input_1.jpg | 709x1039 | 278 | 278 | **100.0%** |
-| input_2.gif | 634x604 | 151 | 151 | 88.7% |
-| input_3.jpg | 382x523 | 87 | 63 | 54.0% |
+| image | size | ref | ours | agreement | key |
+|---|---|---|---|---|---|
+| input_0.png | 2480x3508 | 419 | 419 | **100.0%** | = |
+| input_1.jpg | 709x1039 | 278 | 278 | **100.0%** | = |
+| input_2.gif | 634x604 | 151 | 151 | 88.7% | = |
+| input_3.jpg | 382x523 | 87 | 63 | 54.0% | = |
+| input_4.jpg | - | 170 | 166 | 97.1% | **1=E vs 1=bE** |
+| input_5.jpg | - | 280 | 280 | 95.4% | = |
+
+**The open lead: digits collapse to `1`.** Every disagreement seen so far is a digit read as
+`1` that should have been something else - `3' 2' 1'` read as `1' 1' 1'`, `3 5 2 3 3` read as
+`1 5 2 1 1`. It is one failure mode, not scattered noise, which is why it is worth chasing
+before anything else. A confusion matrix over the aligned pairs would size it in a few minutes.
+
+**Second lead: input_4 loses a flat**, reading `1=E` where the sheet says `1=bE`. That is
+header parsing, independent of the note stream.
 
 Two exact matches say the vendored pipeline is not broken in general - `diff` against
 jpeditor's `src/omr/` is import paths and the canvas shim, nothing else.
