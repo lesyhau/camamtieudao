@@ -39,8 +39,19 @@ export const bare = (s: string): string => s.replace(/[\s\p{P}]+/gu, "");
  * Only patterns that are unambiguous are dropped: a URL fragment, or a long run of digits. A
  * bare latin word is NOT dropped, because a lyric can legitimately contain one.
  */
-const JUNK = /https?|www\.|\.com|\.cn|comspace|\d{5,}/i;
-const isJunk = (syllable: string): boolean => JUNK.test(syllable);
+const HAN = /\p{Script=Han}/u;
+/**
+ * Not a word of the song.
+ *
+ * A Chinese sheet's lyric row is Han characters. The credit line printed along the bottom -
+ * a website, a QQ group, "JP-Word" - sits close enough to the last stave to be read as another
+ * lyric row, and arrives here as `ht`, `t`, `p：`, `wwwqupu`, `JP-`. Anything with no Han
+ * character in it at all is that, not lyric.
+ *
+ * The trade: a Chinese song that prints an English word in its lyrics loses that word. That is
+ * rare, and the alternative - a stave of watermark under the last line of every sheet - is not.
+ */
+const isJunk = (syllable: string): boolean => syllable.trim() !== "" && !HAN.test(syllable);
 
 /**
  * The song as a list of syllables, verses merged and repeats inside a syllable collapsed.
@@ -89,7 +100,36 @@ export function units(doc: CamAmDoc): Unit[] {
     current.notes.push(n);
   }
 
-  return out.filter((u) => u.notes.length);
+  return unglue(out.filter((u) => u.notes.length));
+}
+
+/**
+ * One lyric cell can arrive holding a whole clause - `我会在你的心` where the sheet prints six
+ * separate characters under six separate notes. The lyric reader failed to find the gaps, so
+ * downstream everything is one syllable held across six notes, and the words stop lining up
+ * with the notes for the rest of the phrase.
+ *
+ * Split it back: one Han character per note, in order. Trailing punctuation stays with the last
+ * character. If there are more characters than notes the surplus joins the final note rather
+ * than being dropped - a crowded cell is better than a missing word.
+ */
+export function unglue(us: Unit[]): Unit[] {
+  const out: Unit[] = [];
+  for (const u of us) {
+    const chars = u.syllable.match(/\p{Script=Han}[^\p{Script=Han}\s]*/gu) ?? [];
+    if (chars.length < 2 || u.notes.length < 2) { out.push(u); continue; }
+
+    const n = Math.min(chars.length, u.notes.length);
+    for (let k = 0; k < n; k++) {
+      const last = k === n - 1;
+      out.push({
+        syllable: last ? chars.slice(k).join("") : chars[k],
+        // The last unit keeps whatever notes are left, so a held tail stays held.
+        notes: last ? u.notes.slice(k) : [u.notes[k]],
+      });
+    }
+  }
+  return out;
 }
 
 /** The sung syllables, in order - the only thing the model is shown. */
@@ -105,8 +145,38 @@ export interface Phrase {
   units: Unit[];
 }
 
-/** Every note of a phrase, in order. */
+/** Every note of a phrase, in order. Used for accounting, not for display. */
 export const phraseNotes = (p: Phrase): Note[] => p.units.flatMap((u) => u.notes);
+
+/**
+ * What the phrase actually shows: one note, one word.
+ *
+ * Two things are dropped, and both are cảm âm convention rather than shortcuts.
+ *
+ * RESTS. A cảm âm is a stream of fingerings; a rest is where you stop blowing, and it is read
+ * off the phrasing, not off a dash in the middle of the line. Printing them put a `–` at the
+ * head of most phrases and taught the reader to skip a character that meant nothing to them.
+ *
+ * HELD NOTES in a sung phrase. When a word is carried across a pitch change the sheet writes
+ * several notes for one syllable; a cảm âm writes the one you start on. Keeping them was what
+ * made a line of 22 notes sit above 6 words.
+ *
+ * An instrumental phrase has no words to pair with, so all of its pitched notes survive - that
+ * is the whole content of an intro or a break.
+ */
+export function phraseCells(p: Phrase): { token: string; syllable: string; note: Note }[] {
+  const sung = p.units.some((u) => u.syllable);
+  const out: { token: string; syllable: string; note: Note }[] = [];
+  for (const u of p.units) {
+    if (sung && !u.syllable) continue;               // a run with no word of its own
+    for (const [k, n] of u.notes.entries()) {
+      if (n.rest) continue;
+      if (sung && k > 0) continue;                   // the word starts on the first note
+      out.push({ token: "", syllable: k === 0 ? u.syllable : "", note: n });
+    }
+  }
+  return out;
+}
 /** The words of a phrase as one line of text. */
 export const phraseLyric = (p: Phrase): string =>
   p.units.map((u) => u.syllable).filter(Boolean).join(" ");

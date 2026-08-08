@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { compose, composeByLine, phraseLyric, phraseNotes, sungText, units } from "./compose.ts";
+import { compose, composeByLine, phraseCells, phraseLyric, phraseNotes, sungText, unglue, units } from "./compose.ts";
 import type { Composed } from "./compose.ts";
 import { parseSections } from "./prompt.ts";
 import { tokenOf } from "./token.ts";
@@ -113,4 +113,51 @@ test("section headings are read, and chrome around them is not", () => {
   const secs = parseSections("```\n## Lời 1\n* bỏ qua\nmột hai ba\n\n## Điệp khúc\nbốn năm\n```");
   assert.deepEqual(secs.map((s) => s.title), ["Lời 1", "Điệp khúc"]);
   assert.deepEqual(secs[0].lines, ["một hai ba"]);
+});
+
+test("a lyric cell holding a whole clause is split back into characters", () => {
+  // What the reader produced for 我会在你的心: six characters in one cell over six notes.
+  const notes = doc.notes.slice(0, 6);
+  const glued = unglue([{ syllable: "我会在你的心", notes }]);
+  assert.equal(glued.length, 6);
+  assert.deepEqual(glued.map((u) => u.syllable), ["我", "会", "在", "你", "的", "心"]);
+  assert.equal(glued.reduce((n, u) => n + u.notes.length, 0), notes.length, "no note is lost");
+});
+
+test("splitting keeps trailing punctuation on the last character, and never drops a word", () => {
+  const notes = doc.notes.slice(0, 3);
+  assert.deepEqual(unglue([{ syllable: "里面。", notes }]).map((u) => u.syllable), ["里", "面。"]);
+  // More characters than notes: the surplus joins the final note rather than vanishing.
+  const tight = unglue([{ syllable: "一二三四", notes: doc.notes.slice(0, 2) }]);
+  assert.equal(tight.map((u) => u.syllable).join(""), "一二三四");
+});
+
+test("the watermark row along the bottom of a sheet is not lyric", () => {
+  const words = sungText(us);
+  for (const junk of ["ht", "wwwqupu", "comspace", "JP-", "Word"]) {
+    assert.ok(!words.includes(junk), `${junk} should not survive as a word`);
+  }
+});
+
+test("what is printed is one note per word, and never a rest", () => {
+  for (const sec of compose(us, parseSections("## A\n一 个 世 界 凋 谢，\n我 会 守 在 你 身 边，"))) {
+    for (const p of sec.phrases) {
+      const cells = phraseCells(p);
+      assert.ok(cells.every((c) => !c.note.rest), "no rest is printed");
+      const sung = p.units.some((u) => u.syllable);
+      if (sung) {
+        const words = cells.filter((c) => c.syllable).length;
+        assert.equal(cells.length, words, "a sung phrase prints exactly one note per word");
+      }
+    }
+  }
+});
+
+test("an instrumental phrase keeps all of its pitched notes", () => {
+  const out = compose(us, parseSections("## Lời 1\n一 个 世 界 凋 谢，"));
+  const intro = out[0];
+  assert.equal(intro.title, "Dạo đầu");
+  const cells = phraseCells(intro.phrases[0]);
+  const pitched = phraseNotes(intro.phrases[0]).filter((n) => !n.rest).length;
+  assert.equal(cells.length, pitched, "nothing is dropped where there are no words to pair with");
 });

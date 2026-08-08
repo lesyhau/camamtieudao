@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Heart, X, ChevronUp } from "lucide-react";
 
 export const SUPPORT_TITLE = "Ủng hộ Cảm âm Tiêu Dao";
@@ -36,7 +37,7 @@ function SupportBody() {
           src="/qr-ung-ho.png"
           alt="Mã QR chuyển khoản ủng hộ Cảm âm Tiêu Dao"
           onError={() => setFailed(true)}
-          className="w-40 mx-auto rounded-md block"
+          className="w-full rounded-md block"
         />
       )}
     </>
@@ -104,6 +105,8 @@ export function SupportCard() {
  */
 export function SupportDialog() {
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     const onOpen = () => setOpen(true);
@@ -118,9 +121,14 @@ export function SupportDialog() {
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
-  return (
+  // PORTALLED TO <body>, and that is not tidiness - it is the only way this can be centred.
+  // The footer carries `.glass`, which sets `backdrop-filter`, and an element with a
+  // backdrop-filter becomes the containing block for every `position: fixed` descendant. Left
+  // in place, `fixed inset-0` resolved against the FOOTER: the dialog opened below the fold,
+  // off the bottom of the page.
+  return createPortal(
     <div
       role="presentation"
       onClick={() => setOpen(false)}
@@ -145,7 +153,8 @@ export function SupportDialog() {
         <h2 className="text-base font-bold text-ink-primary pr-8 mb-2">{SUPPORT_TITLE}</h2>
         <SupportBody />
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

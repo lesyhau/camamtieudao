@@ -565,12 +565,17 @@ function PolishedScore({ doc, polished, mapping }: { doc: CamAmDoc; polished: Po
                  change simply has empty cells after it - rather than the two rows drifting
                  apart, which is what happens when the notes and the words are printed as two
                  independent runs of different lengths. */
-              <div key={j} data-phrase className="flex flex-wrap items-start gap-x-1 gap-y-2">
+              <div
+                key={j}
+                data-phrase
+                /* One sentence, one line. `flex-wrap` folded a long phrase into two or three
+                   rows and the sentence stopped reading as a sentence; a long one now scrolls
+                   sideways on its own instead, which keeps every line of the song a line. */
+                className="flex flex-nowrap items-start gap-x-1 overflow-x-auto thin-scroll pb-1"
+              >
                 {line.cells.map((cell, k) => (
-                  <span key={k} className="flex flex-col items-center min-w-[2rem]">
-                    <span className={`h-6 leading-6 whitespace-nowrap ${
-                      cell.token === "0" ? "text-ink-disabled" : "text-ink-primary"
-                    }`}>
+                  <span key={k} className="flex flex-col items-center shrink-0 min-w-[2rem]">
+                    <span className="h-6 leading-6 whitespace-nowrap text-ink-primary">
                       {renderToken(cell.token, doc, mapping)}
                     </span>
                     <span className="h-5 leading-5 text-xs text-ink-caption whitespace-nowrap">

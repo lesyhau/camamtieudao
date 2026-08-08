@@ -9,7 +9,7 @@ import { generate, type GeminiConfig } from "../extract/gemini.ts";
 import type { CamAmDoc } from "../camam/types.ts";
 import type { Polished, PolishedSection } from "./types.ts";
 import { SYSTEM, parseSections } from "./prompt.ts";
-import { compose, composeByLine, phraseNotes, sungText, units, type Composed } from "./compose.ts";
+import { compose, composeByLine, phraseCells, phraseNotes, sungText, units, type Composed } from "./compose.ts";
 import { tokenOf } from "./token.ts";
 
 export type { Polished, PolishedLine, PolishedSection } from "./types.ts";
@@ -94,9 +94,8 @@ const toSection = (c: Composed): PolishedSection => ({
   title: c.title,
   // One cell per note. The word sits on the note it starts on; the rest of that unit's notes
   // carry an empty syllable, which is how a held word is drawn.
-  lines: c.phrases.map((p) => ({
-    cells: p.units.flatMap((u) =>
-      u.notes.map((n, k) => ({ token: tokenOf(n), syllable: k === 0 ? u.syllable : "" })),
-    ),
-  })),
+  lines: c.phrases
+    .map((p) => ({ cells: phraseCells(p).map((c2) => ({ token: tokenOf(c2.note), syllable: c2.syllable })) }))
+    // A phrase whose every note was a rest has nothing left to print.
+    .filter((l) => l.cells.length),
 });
