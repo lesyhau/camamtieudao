@@ -151,28 +151,28 @@ export const phraseNotes = (p: Phrase): Note[] => p.units.flatMap((u) => u.notes
 /**
  * What the phrase actually shows: one note, one word.
  *
- * Two things are dropped, and both are cảm âm convention rather than shortcuts.
+ * RESTS are dropped. A cảm âm is a stream of fingerings; a rest is where you stop blowing, and
+ * it is read off the phrasing rather than from a dash mid-line.
  *
- * RESTS. A cảm âm is a stream of fingerings; a rest is where you stop blowing, and it is read
- * off the phrasing, not off a dash in the middle of the line. Printing them put a `–` at the
- * head of most phrases and taught the reader to skip a character that meant nothing to them.
+ * HELD NOTES ARE KEPT, and that is a reversal. They were dropped for one release, on the rule
+ * that a sung phrase should print exactly one note per word - which measured, on the reference
+ * song, at 32% of every recognised note never reaching the reader: 419 recognised, 284 printed.
+ * Those notes are not decoration. When a word is carried across a pitch change, the pitches ARE
+ * the melody, and a sheet like 痴情冢 - built on two-note figures under single syllables - comes
+ * out unplayable without them.
  *
- * HELD NOTES in a sung phrase. When a word is carried across a pitch change the sheet writes
- * several notes for one syllable; a cảm âm writes the one you start on. Keeping them was what
- * made a line of 22 notes sit above 6 words.
- *
- * An instrumental phrase has no words to pair with, so all of its pitched notes survive - that
- * is the whole content of an intro or a break.
+ * The misalignment that prompted the rule is fixed by the LAYOUT, not by deletion: each note is
+ * a column and the word sits under the note it starts on, so a held word is simply followed by
+ * empty cells. One note per word was never the fix; one COLUMN per note was.
  */
 export function phraseCells(p: Phrase): { token: string; syllable: string; note: Note }[] {
-  const sung = p.units.some((u) => u.syllable);
   const out: { token: string; syllable: string; note: Note }[] = [];
   for (const u of p.units) {
-    if (sung && !u.syllable) continue;               // a run with no word of its own
-    for (const [k, n] of u.notes.entries()) {
+    let first = true;                                // the word goes on the first note SHOWN
+    for (const n of u.notes) {
       if (n.rest) continue;
-      if (sung && k > 0) continue;                   // the word starts on the first note
-      out.push({ token: "", syllable: k === 0 ? u.syllable : "", note: n });
+      out.push({ token: "", syllable: first ? u.syllable : "", note: n });
+      first = false;
     }
   }
   return out;

@@ -139,16 +139,34 @@ test("the watermark row along the bottom of a sheet is not lyric", () => {
   }
 });
 
-test("what is printed is one note per word, and never a rest", () => {
+test("rests are not printed, but every pitched note is", () => {
+  // The melody is the thing. Dropping the notes a word is held across measured at 32% of the
+  // song missing, which is what made a sheet built on two-note figures unplayable.
+  let printed = 0, pitched = 0;
   for (const sec of compose(us, parseSections("## A\n一 个 世 界 凋 谢，\n我 会 守 在 你 身 边，"))) {
     for (const p of sec.phrases) {
       const cells = phraseCells(p);
       assert.ok(cells.every((c) => !c.note.rest), "no rest is printed");
-      const sung = p.units.some((u) => u.syllable);
-      if (sung) {
-        const words = cells.filter((c) => c.syllable).length;
-        assert.equal(cells.length, words, "a sung phrase prints exactly one note per word");
+      printed += cells.length;
+      pitched += phraseNotes(p).filter((n) => !n.rest).length;
+    }
+  }
+  assert.equal(printed, pitched, "every pitched note survives to the page");
+});
+
+test("a word sits on the first note it is sung on, never on a note that continues it", () => {
+  const [sec] = compose(us, parseSections("## A\n一 个 世 界 凋 谢，"));
+  for (const p of sec.phrases) {
+    let seen = 0;
+    for (const u of p.units) {
+      const shown = u.notes.filter((n) => !n.rest);
+      if (!shown.length) continue;
+      const cells = phraseCells(p).slice(seen, seen + shown.length);
+      if (u.syllable) {
+        assert.equal(cells[0].syllable, u.syllable, "the word is on the first note shown");
+        assert.ok(cells.slice(1).every((c) => c.syllable === ""), "held notes carry no second word");
       }
+      seen += shown.length;
     }
   }
 });
