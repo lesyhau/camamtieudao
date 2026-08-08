@@ -184,10 +184,31 @@ the number is a real pitch-stream agreement rather than a text diff.
 | input_4.jpg | - | 170 | 166 | 97.1% | **1=E vs 1=bE** |
 | input_5.jpg | - | 280 | 280 | 95.4% | = |
 
-**The open lead: digits collapse to `1`.** Every disagreement seen so far is a digit read as
-`1` that should have been something else - `3' 2' 1'` read as `1' 1' 1'`, `3 5 2 3 3` read as
-`1 5 2 1 1`. It is one failure mode, not scattered noise, which is why it is worth chasing
-before anything else. A confusion matrix over the aligned pairs would size it in a few minutes.
+**The open lead: the recogniser returns NOTHING for certain cells.**
+`scripts/digit-confusion.ts` and `scripts/dump-bad-cells.ts` narrow it down.
+
+At the note level 26 of 30 substitutions read as `1`. At the CELL level the picture is
+different and more useful: the digit backend returns `0` for those cells, and `0` there means
+*the regex found no digit in the recogniser's output* - an empty read, not a zero. Counted over
+the set: `3` fails 17 times, far more than any other glyph, and `1` almost never fails.
+
+`test/debug/bad-*.png` shows the cells. They are about TEN PIXELS tall. A `3` at that size is a
+blob; a `1` is still a stroke. jpeditor reads the same cells correctly with the same model, so
+the difference is in how the 48px recogniser input is built from them, not in the model.
+
+Hypotheses tested and REJECTED, so nobody re-runs them:
+
+- **The canvas crop patch.** `OMR_CANVAS_CROP=0` restores jpeditor's sampling (and the leak).
+  Worth 2 notes on input_2: 134 -> 136 of 151. Real, small, not the cause.
+- **Resolution.** `scripts/try-upscale.ts` enlarges before recognition. It makes input_2 WORSE
+  (88.7% -> 84.8% at 2x) and moves input_3 around without fixing it.
+- **Resampling quality.** @napi-rs/canvas defaults `imageSmoothingQuality` to `low` where a
+  browser's `low` is bilinear, which looked like the whole answer. Forcing `high` is worse
+  everywhere: input_3 54.0 -> 40.2, input_5 95.4 -> 92.5, input_1 100 -> 99.3. The input is
+  already hard black and white, and blurring a thresholded stroke destroys it. Reverted.
+
+Next: compare our binary map against jpeditor's for input_2, pixel for pixel. Everything above
+assumes the two pipelines are looking at the same ink; that has not been checked.
 
 **Second lead: input_4 loses a flat**, reading `1=E` where the sheet says `1=bE`. That is
 header parsing, independent of the note stream.

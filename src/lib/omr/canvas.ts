@@ -71,6 +71,7 @@ const nativeDrawImage = ctxProto.drawImage;
 /** Escape hatch for measuring the patch's effect on recognition. `0` restores the leak. */
 const CROP_ENABLED = process.env.OMR_CANVAS_CROP !== "0";
 
+
 ctxProto.drawImage = function (this: unknown, ...args: DrawArgs) {
   const src = args[0] as { width?: number; height?: number; getContext?: unknown } | null;
   if (CROP_ENABLED && args.length === 9 && src && typeof src.getContext === "function") {
