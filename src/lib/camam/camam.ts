@@ -70,6 +70,19 @@ export interface MappingResult {
 }
 
 /**
+ * One note's name, given a band offset the CALLER already knows.
+ *
+ * Split out of mapAll so a note that did not come from the original extraction - one the
+ * polish step produced, say - renders through exactly the same code as the rest of the song
+ * rather than through a second, drifting copy. `bandOffset` is the song-wide shift mapAll
+ * computed; MappingInfo carries it for precisely this.
+ */
+export function nameOf(p: number, accidental: Accidental, anchorDigit: number, bandOffset: number): string {
+  const { ring, band } = place(p, anchorDigit);
+  return applyCase(RING[ring] + altText(alteration(ring, anchorDigit, accidental)), band + bandOffset);
+}
+
+/**
  * Two-pass: place every note, find the lowest band actually used, shift so it is 0,
  * then render. `minBand` depends on the whole song, so this cannot be done per note.
  */
@@ -82,11 +95,9 @@ export function mapAll(notes: PitchInput[], anchor: AnchorSpec): MappingResult {
   const maxBand = bands.length ? Math.max(...bands) : 0;
   const bandsUsed = bands.length ? maxBand - minBand + 1 : 0;
 
-  const names = placed.map((x, i) => {
-    if (!x) return null;
-    const alt = alteration(x.ring, anchor.anchorDigit, notes[i].accidental);
-    return applyCase(RING[x.ring] + altText(alt), x.band - minBand);
-  });
+  const names = placed.map((x, i) =>
+    x === null ? null : nameOf(notes[i].p!, notes[i].accidental, anchor.anchorDigit, -minBand),
+  );
 
   return {
     info: {

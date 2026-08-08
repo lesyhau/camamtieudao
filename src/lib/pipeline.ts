@@ -9,11 +9,23 @@ import { renderCamAm, summarize, recommendedMapping } from "./camam/render.ts";
 import type { CamAmDoc } from "./camam/types.ts";
 import { extract } from "./extract/extract.ts";
 import { configFromEnv } from "./extract/gemini.ts";
+import { polish } from "./polish/polish.ts";
+import { renderPolished } from "./polish/render.ts";
+import type { Polished } from "./polish/types.ts";
 
 export type Tier = "free" | "paid";
 
+/**
+ * The stages a caller can watch. A conversion is 20 seconds of silence otherwise, and "it is
+ * working" is a different message from "it is stuck".
+ */
+export type Step = "decode" | "recognize" | "build" | "polish";
+export type OnStep = (step: Step) => void;
+
 export interface ConvertResult {
   doc: CamAmDoc;
+  /** Null whenever the polish model is unavailable or unhappy; the grid is the fallback. */
+  polished: Polished | null;
   tier: Tier;
   ms: number;
 }
@@ -22,12 +34,16 @@ export interface ConvertResult {
  * Free tier: the local OMR pipeline. No network, no per-image cost, ~13s.
  * Measured on the reference sheet at 100% pitch, 100% octave, 100% cam am, 98% rhythm.
  */
-export async function convertFree(bytes: Uint8Array, mime?: string): Promise<ConvertResult> {
+export async function convertFree(bytes: Uint8Array, mime?: string, onStep: OnStep = () => {}): Promise<ConvertResult> {
   const t0 = Date.now();
+  onStep("decode");
   const bin = await decodeToBinary(bytes, mime);
+  onStep("recognize");
   const rec = await recognizeJianpu(bin, paddleOcrBackend());
+  onStep("build");
   const doc = build(fromRecognized(rec as unknown as RecognizedScore), "musicpp");
-  return { doc, tier: "free", ms: Date.now() - t0 };
+  onStep("polish");
+  return { doc, polished: await polish(doc), tier: "free", ms: Date.now() - t0 };
 }
 
 /**
@@ -36,17 +52,22 @@ export async function convertFree(bytes: Uint8Array, mime?: string): Promise<Con
  * repeat/volta structure the local pipeline cannot see at all. Priced and described on that
  * basis, not on accuracy.
  */
-export async function convertPaid(bytes: Uint8Array, mime = "image/jpeg"): Promise<ConvertResult> {
+export async function convertPaid(bytes: Uint8Array, mime = "image/jpeg", onStep: OnStep = () => {}): Promise<ConvertResult> {
   const t0 = Date.now();
+  onStep("recognize");
   const res = await extract(configFromEnv(), {
     image: { mimeType: mime, data: Buffer.from(bytes).toString("base64") },
   });
+  onStep("build");
   const doc = build(res.score, "gemini");
-  return { doc, tier: "paid", ms: Date.now() - t0 };
+  onStep("polish");
+  return { doc, polished: await polish(doc), tier: "paid", ms: Date.now() - t0 };
 }
 
-export async function convert(bytes: Uint8Array, mime: string | undefined, tier: Tier): Promise<ConvertResult> {
-  return tier === "paid" ? convertPaid(bytes, mime) : convertFree(bytes, mime);
+export async function convert(
+  bytes: Uint8Array, mime: string | undefined, tier: Tier, onStep: OnStep = () => {},
+): Promise<ConvertResult> {
+  return tier === "paid" ? convertPaid(bytes, mime, onStep) : convertFree(bytes, mime, onStep);
 }
 
 /** The chat reply for a finished conversion. */
@@ -58,7 +79,13 @@ export function replyFor(r: ConvertResult): string {
     `(${(r.ms / 1000).toFixed(0)}s · ${r.tier === "free" ? "miễn phí" : "nâng cao"})`,
   ].join("\n");
 
-  const body = renderCamAm(doc, { mapping: recommendedMapping(doc), lyrics: "inline", header: false });
+  // The polish runs for every conversion, so the chat reply spends it too rather than
+  // paying for a rewrite only the website reads.
+  // `head` above already prints the title and the key/metre summary, so the polished text's
+  // own two header lines are dropped rather than repeated.
+  const body = r.polished
+    ? renderPolished(r.polished, doc, recommendedMapping(doc)).split("\n").slice(2).join("\n").trim()
+    : renderCamAm(doc, { mapping: recommendedMapping(doc), lyrics: "inline", header: false });
 
   const other = Object.keys(doc.mappings).find((m) => m !== recommendedMapping(doc));
   const foot = other

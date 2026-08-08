@@ -73,24 +73,47 @@ export async function POST(req: Request): Promise<Response> {
   // two people with the same sheet - is one conversion, and the second caller joins the first.
   const key = createHash("sha256").update(bytes).digest("hex");
 
-  try {
-    const result = await sharedQueue.submit(key, () => convertFree(bytes, mime));
-    return Response.json({ doc: result.doc, ms: result.ms, tier: result.tier });
-  } catch (e) {
-    if (e instanceof QueueFullError) {
-      return Response.json(
-        { error: "Đang xử lý hơi nhiều. Bạn đợi một chút rồi thử lại nhé." },
-        { status: 503, headers: { "retry-after": "30" } },
-      );
-    }
-    const msg = e instanceof Error ? e.message : String(e);
-    console.error("[convert] failed", e);
-    if (/PDF/i.test(msg)) {
-      return Response.json({ error: "Chưa đọc được file PDF. Bạn gửi ảnh PNG/JPEG nhé." }, { status: 415 });
-    }
-    return Response.json(
-      { error: "Chưa đọc được bản nhạc này. Thử ảnh rõ hơn, đủ sáng và thẳng góc nhé." },
-      { status: 422 },
-    );
-  }
+  // NDJSON, streamed: one `{"step":...}` line per stage, then one final line carrying either
+  // the document or an error. A conversion is ~20s of silence otherwise, and the browser can
+  // read a growing text body incrementally - which is what lets the upload keep XHR (the only
+  // transport that reports upload progress) instead of moving to fetch and losing it.
+  //
+  // The status is always 200, even for a failure: by the time a stage fails the headers are
+  // long gone. The error travels in the last line, and the client reads it from there.
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const send = (obj: unknown) => controller.enqueue(encoder.encode(JSON.stringify(obj) + "\n"));
+      try {
+        // The dedup key means a second caller with the same image joins the first conversion
+        // in flight - so this callback may fire for work another request started. That is
+        // fine: the stages are the same, and the steps it reports are still true.
+        const result = await sharedQueue.submit(key, () => convertFree(bytes, mime, (step) => send({ step })));
+        send({ doc: result.doc, polished: result.polished, ms: result.ms, tier: result.tier });
+      } catch (e) {
+        send({ error: messageFor(e) });
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "content-type": "application/x-ndjson; charset=utf-8",
+      "cache-control": "no-store, no-transform",
+      // nginx is configured with proxy_buffering off, but this says so at the response level
+      // too - a buffering proxy would hold every step until the body ended, which is exactly
+      // the silence this endpoint exists to break.
+      "x-accel-buffering": "no",
+    },
+  });
+}
+
+function messageFor(e: unknown): string {
+  if (e instanceof QueueFullError) return "Đang xử lý hơi nhiều. Bạn đợi một chút rồi thử lại nhé.";
+  const msg = e instanceof Error ? e.message : String(e);
+  console.error("[convert] failed", e);
+  if (/PDF/i.test(msg)) return "Chưa đọc được file PDF. Bạn gửi ảnh PNG/JPEG nhé.";
+  return "Chưa đọc được bản nhạc này. Thử ảnh rõ hơn, đủ sáng và thẳng góc nhé.";
 }

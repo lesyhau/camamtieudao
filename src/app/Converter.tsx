@@ -3,16 +3,36 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Trash2, Languages, ImageUp, Copy, Check, Loader2, X } from "lucide-react";
 import type { CamAmDoc } from "@/lib/camam/types.ts";
+import type { Polished } from "@/lib/polish/types.ts";
+import type { Step } from "@/lib/pipeline.ts";
+import { renderPolished, renderToken } from "@/lib/polish/render.ts";
 import { Badge, BadgeToggle } from "@/components/ui/Badge";
 
-interface Result { doc: CamAmDoc; ms: number }
+interface Result { doc: CamAmDoc; polished: Polished | null; ms: number }
 
 const ACCEPT = "image/png,image/jpeg,image/webp,image/bmp";
 
-/** Upload via XHR, not fetch: only XHR reports upload progress. */
+/** What the panel says while it waits, in the order the server passes through them. */
+const STEP_LABEL: Record<Step, string> = {
+  decode: "Đang đọc ảnh…",
+  recognize: "Đang nhận dạng nốt nhạc…",
+  build: "Đang dựng cảm âm…",
+  polish: "Đang biên tập lại cho dễ đọc…",
+};
+
+/**
+ * Upload via XHR, not fetch: only XHR reports UPLOAD progress, and only XHR can be aborted
+ * from a ref without threading an AbortController through everything.
+ *
+ * The response is NDJSON, read incrementally. `onprogress` fires as the body grows and
+ * `responseText` holds everything received so far, so each complete line can be handed to the
+ * caller as it lands - which is how the step labels arrive during the twenty seconds when
+ * nothing else is happening.
+ */
 function upload(
   file: File,
   onProgress: (pct: number) => void,
+  onStep: (step: Step) => void,
   signal: { xhr?: XMLHttpRequest },
 ): Promise<Result> {
   return new Promise((resolve, reject) => {
@@ -22,14 +42,34 @@ function upload(
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
     };
+
+    let consumed = 0;      // characters of responseText already turned into events
+    let final: Result | null = null;
+    let failure: string | null = null;
+
+    const drain = () => {
+      const text = xhr.responseText;
+      let nl: number;
+      while ((nl = text.indexOf("\n", consumed)) !== -1) {
+        const line = text.slice(consumed, nl).trim();
+        consumed = nl + 1;
+        if (!line) continue;
+        let evt: { step?: Step; doc?: CamAmDoc; polished?: Polished | null; ms?: number; error?: string };
+        try { evt = JSON.parse(line); } catch { continue; }
+        if (evt.step) onStep(evt.step);
+        else if (evt.error) failure = evt.error;
+        else if (evt.doc) final = { doc: evt.doc, polished: evt.polished ?? null, ms: evt.ms ?? 0 };
+      }
+    };
+
+    xhr.onprogress = drain;
     xhr.onload = () => {
-      // The server answers JSON, but nginx does not: a 502 or 504 arrives as an HTML error
-      // page. Parsing blindly threw, and the catch reported "cannot reach the server" for a
-      // server that had answered perfectly clearly.
-      let body: { error?: string; doc?: CamAmDoc; ms?: number } | null = null;
-      try { body = JSON.parse(xhr.responseText); } catch { /* not JSON - handled below */ }
-      if (xhr.status >= 200 && xhr.status < 300 && body?.doc) { resolve(body as Result); return; }
-      if (body?.error) { reject(new Error(body.error)); return; }
+      drain();
+      if (final) { resolve(final); return; }
+      if (failure) { reject(new Error(failure)); return; }
+      // Not our stream at all: nginx answers a 502 or 504 with an HTML error page, and the
+      // old code's blind JSON.parse reported "cannot reach the server" for a server that had
+      // answered perfectly clearly.
       reject(new Error(
         xhr.status === 502 || xhr.status === 504
           ? "Máy chủ đang quá tải khi đọc bản nhạc. Bạn thử lại sau ít phút nhé."
@@ -67,6 +107,7 @@ export default function Converter() {
   const [mapping, setMapping] = useState<string | null>(null);
   const [verse, setVerse] = useState(1);
   const [support, setSupport] = useState(true);
+  const [step, setStep] = useState<Step | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const inflight = useRef<{ xhr?: XMLHttpRequest }>({});
   const busy = phase !== "idle";
@@ -95,19 +136,19 @@ export default function Converter() {
 
   const convert = useCallback(async () => {
     if (!file) return;
-    setError(null); setResult(null); setPhase("uploading");
+    setError(null); setResult(null); setStep(null); setPhase("uploading");
     try {
       const r = await upload(file, (p) => {
         // Upload finishing is where the wait changes character: the bytes are sent, now the
         // server reads the sheet. Saying so is the difference between "slow" and "stuck".
         if (p >= 100) setPhase("converting");
-      }, inflight.current);
+      }, setStep, inflight.current);
       setResult(r); setMapping(null); setVerse(1); setSupport(true);
     } catch (e) {
       if ((e as DOMException)?.name !== "AbortError") {
         setError(e instanceof Error ? e.message : "Chuyển đổi thất bại.");
       }
-    } finally { setPhase("idle"); }
+    } finally { setPhase("idle"); setStep(null); }
   }, [file]);
 
   useEffect(() => {
@@ -221,6 +262,7 @@ export default function Converter() {
                 <div className="absolute inset-0 overflow-auto thin-scroll p-4">
                   <ResultPanel
                     doc={doc}
+                    polished={result?.polished ?? null}
                     mapping={active}
                     recommended={recommended}
                     setMapping={setMapping}
@@ -228,7 +270,7 @@ export default function Converter() {
                     setVerse={setVerse}
                   />
                 </div>
-                <CopyButton text={() => toPlainText(doc, active)} />
+                <CopyButton text={() => result?.polished ? renderPolished(result.polished, doc, active) : toPlainText(doc, active)} />
                 {/* Only after a conversion lands: asking before the tool has done anything for
                     someone is asking a stranger. */}
                 {support && <SupportCard onClose={() => setSupport(false)} />}
@@ -255,6 +297,15 @@ export default function Converter() {
                   ? <Loader2 size={32} className="animate-spin" role="status" aria-hidden="true" />
                   : <Languages size={32} aria-hidden="true" />}
                 <span className="text-base font-bold">{busy ? "Hủy" : "Dịch"}</span>
+                {/* The stage the server is on, streamed back as it happens. Twenty seconds of
+                    a spinner and nothing else is indistinguishable from twenty seconds of
+                    being stuck. Fixed height so naming a longer stage does not nudge the
+                    layout under the pointer that is about to click Hủy. */}
+                {busy && (
+                  <span className="h-5 text-xs text-ink-caption">
+                    {step ? STEP_LABEL[step] : "Đang gửi ảnh…"}
+                  </span>
+                )}
                 {!busy && !file && (
                   <span className="text-xs text-ink-disabled">Chọn ảnh bản nhạc trước</span>
                 )}
@@ -439,8 +490,9 @@ function SupportCard({ onClose }: { onClose: () => void }) {
   );
 }
 
-function ResultPanel({ doc, mapping, recommended, setMapping, verse, setVerse }: {
+function ResultPanel({ doc, polished, mapping, recommended, setMapping, verse, setVerse }: {
   doc: CamAmDoc;
+  polished: Polished | null;
   mapping: string;
   recommended: string;
   setMapping: (m: string) => void;
@@ -475,13 +527,57 @@ function ResultPanel({ doc, mapping, recommended, setMapping, verse, setVerse }:
             title={id === recommended ? `${m.label} - ít quãng tám nhất, nên dùng` : m.label}
           />
         ))}
-        {doc.verseCount > 1 &&
+        {/* The polished view merges the verses into one, so there is nothing left to switch
+            between - the badges only appear on the grid fallback. */}
+        {!polished && doc.verseCount > 1 &&
           Array.from({ length: doc.verseCount }, (_, i) => i + 1).map((v) => (
             <BadgeToggle key={v} label={`Lời ${v}`} selected={v === verse} onClick={() => setVerse(v)} />
           ))}
       </div>
 
-      <Score doc={doc} mapping={mapping} verse={verse} />
+      {polished
+        ? <PolishedScore doc={doc} polished={polished} mapping={mapping} />
+        : <Score doc={doc} mapping={mapping} verse={verse} />}
+
+      {/* Not fine print. The reading is only ever as good as the photograph, and the polish
+          step is a language model rewriting phrasing - both can be wrong, and someone
+          learning the piece from this deserves to know before they learn it wrong. */}
+      <p className="mt-6 pt-3 border-t border-line text-xs text-ink-disabled leading-snug">
+        Kết quả được máy đọc tự động{polished ? " và biên tập lại bằng AI" : ""}, nên phụ thuộc
+        vào chất lượng ảnh bạn tải lên và có thể còn sai sót. Bạn nhớ đối chiếu với bản nhạc gốc
+        trước khi tập nhé.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * The polished score: one phrase per line, its words underneath.
+ *
+ * The model returns JIANPU tokens, and the cảm âm name is computed here - by the same
+ * `nameOf` the original conversion uses, with the same band offset off the doc. So switching
+ * fingering still works on polished output, and a name can never disagree with the grid's.
+ */
+function PolishedScore({ doc, polished, mapping }: { doc: CamAmDoc; polished: Polished; mapping: string }) {
+
+
+  return (
+    <div className="space-y-5">
+      {polished.sections.map((sec, i) => (
+        <section key={i}>
+          {sec.title && (
+            <h3 className="text-xs label-upper text-brand-legible mb-2">{sec.title}</h3>
+          )}
+          <div className="space-y-3">
+            {sec.lines.map((line, j) => (
+              <div key={j}>
+                <p className="text-ink-primary leading-6">{line.tokens.map((t) => renderToken(t, doc, mapping)).join(" ")}</p>
+                {line.lyric && <p className="text-xs text-ink-caption leading-5">{line.lyric}</p>}
+              </div>
+            ))}
+          </div>
+        </section>
+      ))}
     </div>
   );
 }
