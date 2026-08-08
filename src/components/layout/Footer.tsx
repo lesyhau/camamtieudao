@@ -4,8 +4,8 @@ const LINK =
   'block w-fit text-xs mb-2 text-brand-legible hover:opacity-80 hover:underline underline-offset-[3px] transition-opacity focus-ring rounded-sm'
 const HEADING = 'text-xs label-upper text-ink-disabled mb-3'
 
-// Công cụ / Pháp lý are held back until the pages behind them exist - a footer column of links
-// to nothing is worse than a shorter footer. Hỗ trợ is the one that resolves today.
+// A column only appears once the pages behind it exist - a footer link to nothing is worse
+// than a shorter footer. Công cụ is still waiting on a guide page; Pháp lý resolves now.
 //
 // `mt-auto` is what keeps the footer on the bottom edge of a short viewport: the page shell in
 // layout.tsx is a min-h-dvh flex column, so this pushes down against whatever slack is left. It
@@ -41,6 +41,11 @@ export function Footer() {
               <a href="mailto:camamtieudao@outlook.com" className={LINK}>
                 camamtieudao@outlook.com
               </a>
+            </div>
+            <div>
+              <h4 className={HEADING}>Pháp lý</h4>
+              <a href="/quyen-rieng-tu" className={LINK}>Chính sách quyền riêng tư</a>
+              <a href="/dieu-khoan" className={LINK}>Điều khoản sử dụng</a>
             </div>
           </div>
         </div>
