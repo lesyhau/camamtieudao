@@ -30,6 +30,8 @@ export interface RawScore {
   tonic: string;
   beats: number;
   beatType: number;
+  /** Metronome mark, when the source states one. `♩=69` -> 69. */
+  bpm?: number;
   authors: string[];
   notes: RawNote[];
   measures: RawMeasure[];

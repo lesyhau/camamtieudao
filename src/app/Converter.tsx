@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Trash2, Languages, ImageUp, Copy, Check, Loader2, X } from "lucide-react";
 import type { CamAmDoc } from "@/lib/camam/types.ts";
+import { Badge, BadgeToggle } from "@/components/ui/Badge";
 
 interface Result { doc: CamAmDoc; ms: number }
 
@@ -48,6 +49,12 @@ function upload(
 // A4 portrait, so the empty dropzone is already the shape of what goes into it and the layout
 // does not move when an image replaces it.
 const SHEET = "aspect-[1/1.4142] w-full rounded-card relative flex items-center justify-center";
+
+// The result panel only borrowed A4 so the empty placeholder matched the sheet beside it. Now
+// that it is three times the width, keeping the ratio made it 1018px tall - taller than the
+// viewport, for content that scrolls anyway. Stacked on a phone it still matches the sheet
+// above it; side by side it takes a fixed height that fits a laptop screen whole.
+const PANEL = "w-full rounded-card relative aspect-[1/1.4142] lg:aspect-auto lg:h-[40rem]";
 
 export default function Converter() {
   const [file, setFile] = useState<File | null>(null);
@@ -140,19 +147,19 @@ export default function Converter() {
           gives both panels the width the middle column used to take, and a tighter gap brings
           them together. Landscape puts them side by side, portrait stacks them, and it is grid
           alone - no viewport JavaScript, so it is right on first paint. */}
-      <div className="grid gap-5 lg:gap-4 grid-cols-1 lg:grid-cols-2 items-start">
-        <section aria-label="Ảnh bản nhạc" className="min-w-0">
+      <div className="grid gap-5 lg:gap-4 grid-cols-1 lg:grid-cols-[1fr_3fr] items-center lg:items-start justify-items-center lg:justify-items-stretch">
+        <section aria-label="Ảnh bản nhạc" className="min-w-0 w-full">
           {!preview ? (
             <button
               type="button"
               onClick={() => inputRef.current?.click()}
               {...dropProps}
-              className={`${SHEET} flex-col gap-1 text-center px-6 border-2 border-dashed glow-border focus-ring ${
+              className={`${SHEET} flex-col gap-1 text-center px-4 border-2 border-dashed glow-border focus-ring ${
                 over ? "border-brand-accent bg-brand-solid/10" : "border-line hover:border-brand-accent"
               }`}
             >
               <ImageUp size={28} className="text-ink-disabled mb-2" aria-hidden="true" />
-              <strong className="text-ink-primary">Kéo thả ảnh bản nhạc vào đây</strong>
+              <strong className="text-ink-primary text-sm">Kéo thả ảnh bản nhạc vào đây</strong>
               <span className="text-xs text-ink-caption">
                 hoặc bấm để chọn file · PNG, JPEG, WebP · tối đa 20MB
               </span>
@@ -204,17 +211,16 @@ export default function Converter() {
           )}
         </section>
 
-        <section aria-label="Kết quả" className="min-w-0">
+        <section aria-label="Kết quả" className="min-w-0 w-full">
           {/* The box scrolls, but the copy button must not scroll with it: the scrolling
               element is the INNER absolute layer, so the button is a sibling of it and stays
               pinned to the corner of the frame. */}
-          <div className={`${SHEET} border border-line bg-surface !block overflow-hidden`}>
+          <div className={`${PANEL} border border-line bg-surface overflow-hidden`}>
             {doc && !error ? (
               <>
                 <div className="absolute inset-0 overflow-auto thin-scroll p-4">
                   <ResultPanel
                     doc={doc}
-                    ms={result?.ms}
                     mapping={active}
                     recommended={recommended}
                     setMapping={setMapping}
@@ -433,51 +439,46 @@ function SupportCard({ onClose }: { onClose: () => void }) {
   );
 }
 
-function ResultPanel({ doc, ms, mapping, recommended, setMapping, verse, setVerse }: {
+function ResultPanel({ doc, mapping, recommended, setMapping, verse, setVerse }: {
   doc: CamAmDoc;
-  ms?: number;
   mapping: string;
   recommended: string;
   setMapping: (m: string) => void;
   verse: number;
   setVerse: (v: number) => void;
 }) {
-  const chip = (on: boolean) =>
-    `rounded-md border px-2.5 py-1 text-xs transition-colors focus-ring ${
-      on
-        ? "border-brand-accent bg-brand-solid/15 text-ink-primary"
-        : "border-line text-ink-secondary hover:border-brand-accent"
-    }`;
-
   return (
     <div>
       {/* pr-12 keeps a long title clear of the copy button pinned to the corner above it. */}
-      <h2 className="text-base font-bold text-ink-primary mb-0.5 pr-12">{doc.title || "Bản nhạc"}</h2>
-      <p className="text-xs text-ink-caption mb-4">
-        {doc.key.jianpu} · {doc.meter.beats}/{doc.meter.beatType} · {doc.notes.length} nốt ·{" "}
-        {doc.measures.length} ô nhịp · {doc.lines.length} dòng
-        {ms ? ` · ${(ms / 1000).toFixed(0)}s` : null}
-      </p>
+      <h2 className="text-base font-bold text-ink-primary mb-2 pr-12">{doc.title || "Bản nhạc"}</h2>
 
-      <div className="flex flex-wrap gap-5 mb-5">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-xs label-upper text-ink-disabled">Cách bấm</span>
-          {Object.entries(doc.mappings).map(([id, m]) => (
-            <button key={id} onClick={() => setMapping(id)} aria-pressed={id === mapping} className={chip(id === mapping)}>
-              {m.label}{id === recommended ? " ✓" : ""}
-            </button>
+      {/* One row of badges. The note/measure/line counts and the conversion time are gone:
+          they described the machine's work, not the music, and nobody plays from them. Key,
+          metre and tempo are what a player reads off the top of a sheet. */}
+      <div className="flex flex-wrap items-center gap-1.5 mb-4">
+        <Badge label={doc.key.jianpu} variant="electric" />
+        <Badge label={`${doc.meter.beats}/${doc.meter.beatType}`} variant="electric" />
+        {doc.tempo && <Badge label={`♩=${doc.tempo.bpm}`} variant="electric" />}
+      </div>
+
+      {/* The "Cách bấm" and "Lời" captions are folded into the badges themselves - a label
+          plus a value where the value alone was ambiguous. The tick on the recommendation is
+          gone too: the selected badge is already filled, so a tick on top of it read as a
+          second, competing state. */}
+      <div className="flex flex-wrap items-center gap-1.5 mb-5">
+        {Object.entries(doc.mappings).map(([id, m]) => (
+          <BadgeToggle
+            key={id}
+            label={`Thế bấm ${m.label.replace(/\D+/g, "") || m.label}`}
+            selected={id === mapping}
+            onClick={() => setMapping(id)}
+            title={id === recommended ? `${m.label} - ít quãng tám nhất, nên dùng` : m.label}
+          />
+        ))}
+        {doc.verseCount > 1 &&
+          Array.from({ length: doc.verseCount }, (_, i) => i + 1).map((v) => (
+            <BadgeToggle key={v} label={`Lời ${v}`} selected={v === verse} onClick={() => setVerse(v)} />
           ))}
-        </div>
-        {doc.verseCount > 1 && (
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-xs label-upper text-ink-disabled">Lời</span>
-            {Array.from({ length: doc.verseCount }, (_, i) => i + 1).map((v) => (
-              <button key={v} onClick={() => setVerse(v)} aria-pressed={v === verse} className={chip(v === verse)}>
-                {v}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
 
       <Score doc={doc} mapping={mapping} verse={verse} />

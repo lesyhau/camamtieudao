@@ -19,8 +19,8 @@
 //      every step in filter range.
 //
 // Ink colour is baked per file rather than left to a CSS filter, because the mark has to be
-// ink-primary in each mode and those are two different hues (deep teal / pale blue), not an
-// inversion of one another.
+// ink-primary in each mode, and those are two different tones (warm sand on the dark canvas,
+// deep chestnut on the light one) rather than an inversion of one another.
 import { readFileSync, writeFileSync } from "node:fs";
 import { createCanvas, loadImage, type Canvas } from "@napi-rs/canvas";
 
@@ -85,8 +85,8 @@ function resize(src: Canvas, size: number): Canvas {
 
 // ink-primary in each mode, straight from globals.css - so the mark is the same ink as the
 // wordmark beside it rather than a near-miss.
-const INK_DARK: [number, number, number] = [204, 232, 242];  // dark mode
-const INK_LIGHT: [number, number, number] = [22, 78, 99];    // light mode
+const INK_DARK: [number, number, number] = [238, 220, 208];  // dark mode
+const INK_LIGHT: [number, number, number] = [91, 55, 30];    // light mode
 
 const src = new URL("logo.png", root);
 
@@ -97,7 +97,7 @@ const src = new URL("logo.png", root);
 // icon cannot read the site's own toggle, so the pair is selected by `prefers-color-scheme` in
 // the metadata and re-pointed by ThemeProvider when the toggle moves - see src/app/layout.tsx.
 const OUT: Array<[string, [number, number, number], number, number]> = [
-  ["public/logo.png", [17, 24, 26], 512, 0.06],        // neutral master: OG images, share cards
+  ["public/logo.png", [25, 21, 18], 512, 0.06],        // neutral master: OG images, share cards
   ["public/logo-dark.png", INK_DARK, 256, 0.06],
   ["public/logo-light.png", INK_LIGHT, 256, 0.06],
   // Favicons get more air than the header mark: a tab strip crops tight and sits the icon
@@ -106,7 +106,7 @@ const OUT: Array<[string, [number, number, number], number, number]> = [
   ["public/icon-light.png", INK_LIGHT, 256, 0.14],
   // iOS has no dark variant for a home-screen icon and composites onto an unknown wallpaper,
   // so this one keeps the mid-tone brand-solid that holds against either.
-  ["src/app/apple-icon.png", [32, 111, 141], 180, 0.14],
+  ["src/app/apple-icon.png", [130, 79, 43], 180, 0.14],
 ];
 
 for (const [path, ink, size, pad] of OUT) {

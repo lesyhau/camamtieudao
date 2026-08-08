@@ -2,7 +2,7 @@
 // the same background proxyma.ai paints. Static: the animated
 // canvas star field was removed in the 2026-08-01 rebuild.
 //
-// Token-driven rather than a literal cyan, so it renders correctly in light mode too instead
+// Token-driven rather than a literal colour, so it renders correctly in light mode too instead
 // of being a dark-only effect that has to be switched off. The previous version hardcoded
 // rgba(6,182,212,...) - a colour from the retired "ocean" palette that no longer exists.
 export function SiteBackground() {

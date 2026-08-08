@@ -35,6 +35,8 @@ export interface RecognizedScore {
   beatType: number;
   title?: string;
   credits?: string[];
+  /** Metronome mark read off the header (`♩=69`), when the sheet prints one. */
+  tempo?: number;
   rows: RecognizedRow[];
 }
 
@@ -112,6 +114,8 @@ export function fromRecognized(rec: RecognizedScore): RawScore {
     tonic: TONIC_BY_FIFTHS[rec.fifths] ?? "C",
     beats: rec.beats,
     beatType: rec.beatType,
+    // header.ts parses `♩=NN` off the sheet; it used to stop here.
+    bpm: rec.tempo,
     authors: rec.credits ?? [],
     notes,
     measures,

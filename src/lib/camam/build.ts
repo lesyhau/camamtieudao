@@ -93,6 +93,7 @@ export function build(raw: RawScore, engine: string): CamAmDoc {
     credits,
     key: { jianpu: raw.keyText, tonic: raw.tonic, fifths: fifthsOf(raw.tonic) },
     meter: { beats: raw.beats, beatType: raw.beatType },
+    ...(raw.bpm ? { tempo: { unit: "quarter", bpm: raw.bpm } } : {}),
     baseUnit: "quarter",
     verseCount: raw.verses.length,
     pitchRange: {

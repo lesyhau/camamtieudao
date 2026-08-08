@@ -1,6 +1,7 @@
 import { BrandLockup } from '@/components/ui/BrandLogo'
 
-const LINK = 'block text-sm mb-2 text-ink-caption hover:text-ink-primary transition-colors'
+const LINK =
+  'block w-fit text-xs mb-2 text-brand-legible hover:opacity-80 hover:underline underline-offset-[3px] transition-opacity focus-ring rounded-sm'
 const HEADING = 'text-xs label-upper text-ink-disabled mb-3'
 
 // Công cụ / Pháp lý are held back until the pages behind them exist - a footer column of links

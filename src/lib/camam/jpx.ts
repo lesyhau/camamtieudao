@@ -112,7 +112,11 @@ export function parseJpx(text: string): RawScore {
           out.beats = Number(m[1]); out.beatType = Number(m[2]);
           break;
         }
-        case "tempo": break;
+        case "tempo": {
+          const n = Number(v);
+          if (Number.isFinite(n) && n > 0) out.bpm = n;
+          break;
+        }
         case "verses": verseCount = Math.max(1, Number(v) || 1); break;
         // JPX writes the role first (`#credit 作词 郭德紫毅`) because it is a structured field
         // and that is easier for a model to get right. Sheets and .jpwabc print it last.
