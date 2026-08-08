@@ -68,9 +68,12 @@ const ctxProto = Object.getPrototypeOf(napiCreateCanvas(1, 1).getContext("2d")) 
 };
 const nativeDrawImage = ctxProto.drawImage;
 
+/** Escape hatch for measuring the patch's effect on recognition. `0` restores the leak. */
+const CROP_ENABLED = process.env.OMR_CANVAS_CROP !== "0";
+
 ctxProto.drawImage = function (this: unknown, ...args: DrawArgs) {
   const src = args[0] as { width?: number; height?: number; getContext?: unknown } | null;
-  if (args.length === 9 && src && typeof src.getContext === "function") {
+  if (CROP_ENABLED && args.length === 9 && src && typeof src.getContext === "function") {
     const [, sx, sy, sw, sh, dx, dy, dw, dh] = args as [unknown, ...number[]];
     const W = src.width ?? 0, H = src.height ?? 0;
     // Only when the region is strictly inside the source (a partly-outside read has different

@@ -163,10 +163,39 @@ The lesson worth keeping: every wrong hypothesis was tested with Windows RSS, wh
 
 ```bash
 node scripts/bench-free.ts    # accuracy vs ground truth + peak RSS. Run after ANY omr/ change.
+node scripts/bench-omr.ts     # OUR reading vs jpeditor's, on test/input_N + test/output_N.txt
 node scripts/mem-profile.ts   # per-phase memory timeline, live-printed so an OOM kill keeps it
 ```
 
 Baseline on the reference sheet: 100% pitch, 100% octave, 98.1% rhythm, 100% cảm âm, ~18s.
+
+### Agreement with jpeditor
+
+`test/` pairs each `input_N.<ext>` with `output_N.txt`, the `.jpwabc` jpeditor's browser build
+produced for it. Both sides are parsed by this repo's own reader and compared note for note, so
+the number is a real pitch-stream agreement rather than a text diff.
+
+| image | size | ref | ours | agreement |
+|---|---|---|---|---|
+| input_0.png | 2480x3508 | 419 | 419 | **100.0%** |
+| input_1.jpg | 709x1039 | 278 | 278 | **100.0%** |
+| input_2.gif | 634x604 | 151 | 151 | 88.7% |
+| input_3.jpg | 382x523 | 87 | 63 | 54.0% |
+
+Two exact matches say the vendored pipeline is not broken in general - `diff` against
+jpeditor's `src/omr/` is import paths and the canvas shim, nothing else.
+
+On input_2 the note COUNT matches exactly and 17 digits read differently, so segmentation
+agrees and only the reading disagrees. input_3 is a 382px scan that jpeditor also fails
+(87 notes for a 151-note song); we are worse.
+
+Two hypotheses tested and REJECTED, so nobody re-runs them:
+
+- **The canvas crop patch.** `OMR_CANVAS_CROP=0` restores jpeditor's sampling (and the leak).
+  Worth 2 notes on input_2: 134 -> 136 of 151. Real, small, not the cause.
+- **Resolution.** `scripts/try-upscale.ts` enlarges before recognition. It makes input_2 WORSE
+  (88.7% -> 84.8% at 2x) and moves input_3 around without fixing it. Enlarging is not the
+  answer; decode.ts only shrinking is not the problem.
 
 ## Brand
 
