@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Inter } from "next/font/google";
 import { ThemeProvider, MODE_INIT_SCRIPT } from "@/components/providers/ThemeProvider";
 import { SiteBackground } from "@/components/ui/SiteBackground";
+import { adsConfig } from "@/lib/ads.ts";
 import "./globals.css";
 
 // Inter, replacing Arial.
@@ -38,12 +39,24 @@ export const metadata = {
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
+  const ads = adsConfig();
+
   // data-mode is stamped by the inline script below before first paint; the "dark" here is
   // only the pre-script fallback for a browser with JS disabled, matching the :root defaults.
   return (
     <html lang="vi" data-mode="dark" className={inter.variable} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: MODE_INIT_SCRIPT }} />
+        {/* The AdSense library, and only once there is a publisher id to load it for. Until
+            then not a single byte goes to Google, and the ad positions render their own
+            "advertise here" card instead - see src/lib/ads.ts. */}
+        {ads.client && (
+          <script
+            async
+            src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${encodeURIComponent(ads.client)}`}
+            crossOrigin="anonymous"
+          />
+        )}
       </head>
       <body>
         <SiteBackground />

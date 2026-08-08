@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Trash2, Languages, ImageUp, Copy, Check, Loader2, X } from "lucide-react";
 import type { CamAmDoc } from "@/lib/camam/types.ts";
 import type { Polished } from "@/lib/polish/types.ts";
@@ -102,7 +102,7 @@ const PANEL =
   "w-full rounded-card relative aspect-[1/1.4142] " +
   "lg:aspect-auto lg:h-[calc(100dvh-14rem)] lg:min-h-[30rem]";
 
-export default function Converter() {
+export default function Converter({ aside }: { aside?: ReactNode }) {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [phase, setPhase] = useState<"idle" | "uploading" | "converting">("idle");
@@ -256,6 +256,11 @@ export default function Converter() {
               </div>
             </>
           )}
+          {/* Under the sheet, in the space a full-height result panel leaves empty beside a
+              240px column. Only from `lg`: below that the grid is one column and anything
+              here would sit BETWEEN the image and the result, which is the one place an ad
+              would genuinely be in the way. */}
+          {aside}
         </section>
 
         <section aria-label="Kết quả" className="min-w-0 w-full">
@@ -323,6 +328,17 @@ export default function Converter() {
               </button>
             )}
           </div>
+
+          {/* Below the panel, not inside it. Inside, it was the last thing in a scrolling box
+              with a support card pinned to that box's bottom corner - so the one paragraph
+              that must be read was the one reliably covered. */}
+          {doc && !error && (
+            <p className="mt-3 text-xs text-ink-disabled leading-snug">
+              Kết quả được máy đọc tự động{result?.polished ? " và biên tập lại bằng AI" : ""}, nên
+              phụ thuộc vào chất lượng ảnh bạn tải lên và có thể còn sai sót. Bạn nhớ đối chiếu với
+              bản nhạc gốc trước khi tập nhé.
+            </p>
+          )}
         </section>
       </div>
 
@@ -545,14 +561,6 @@ function ResultPanel({ doc, polished, mapping, recommended, setMapping, verse, s
         ? <PolishedScore doc={doc} polished={polished} mapping={mapping} />
         : <Score doc={doc} mapping={mapping} verse={verse} />}
 
-      {/* Not fine print. The reading is only ever as good as the photograph, and the polish
-          step is a language model rewriting phrasing - both can be wrong, and someone
-          learning the piece from this deserves to know before they learn it wrong. */}
-      <p className="mt-6 pt-3 border-t border-line text-xs text-ink-disabled leading-snug">
-        Kết quả được máy đọc tự động{polished ? " và biên tập lại bằng AI" : ""}, nên phụ thuộc
-        vào chất lượng ảnh bạn tải lên và có thể còn sai sót. Bạn nhớ đối chiếu với bản nhạc gốc
-        trước khi tập nhé.
-      </p>
     </div>
   );
 }
