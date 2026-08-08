@@ -13,6 +13,20 @@ interface Result { doc: CamAmDoc; polished: Polished | null; ms: number }
 
 const ACCEPT = "image/png,image/jpeg,image/webp,image/bmp";
 
+/** A pasted or dropped string that is worth asking the server to fetch. */
+const looksLikeUrl = (text: string): boolean => /^https?:\/\/\S+$/i.test(text.trim());
+
+/** A filename for the File built out of a fetched URL - the caption shows it. */
+function nameFromUrl(url: string): string {
+  try {
+    const last = new URL(url).pathname.split("/").filter(Boolean).pop() ?? "";
+    const clean = decodeURIComponent(last).replace(/[^\w.\-]+/g, "-").slice(-60);
+    return clean.length > 3 ? clean : "anh-tu-lien-ket.jpg";
+  } catch {
+    return "anh-tu-lien-ket.jpg";
+  }
+}
+
 /** What the panel says while it waits, in the order the server passes through them. */
 const STEP_LABEL: Record<Step, string> = {
   decode: "Đang đọc ảnh…",
@@ -114,6 +128,7 @@ export default function Converter() {
   const [mapping, setMapping] = useState<string | null>(null);
   const [verse, setVerse] = useState(1);
   const [step, setStep] = useState<Step | null>(null);
+  const [fetching, setFetching] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const inflight = useRef<{ xhr?: XMLHttpRequest }>({});
   const busy = phase !== "idle";
@@ -128,6 +143,36 @@ export default function Converter() {
     setError(null); setResult(null); setPhase("idle"); setFile(f);
     setPreview((old) => { if (old) URL.revokeObjectURL(old); return URL.createObjectURL(f); });
   }, []);
+
+  /**
+   * Fetches a pasted link through the server and treats the result as if it had been dropped.
+   *
+   * The browser cannot do this itself: an image from another origin is readable as pixels only
+   * with CORS headers the host will not be sending, and the bytes have to reach the server
+   * anyway. Coming back as a File means preview, replace, delete and the conversion all work
+   * without knowing a link was involved.
+   */
+  const fromUrl = useCallback(async (url: string) => {
+    setError(null);
+    setFetching(true);
+    try {
+      const res = await fetch("/api/fetch-image", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.error ?? `Không tải được ảnh (lỗi ${res.status}).`);
+      }
+      const blob = await res.blob();
+      choose(new File([blob], nameFromUrl(url), { type: blob.type || "image/jpeg" }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Không tải được ảnh từ đường dẫn này.");
+    } finally {
+      setFetching(false);
+    }
+  }, [choose]);
 
   const clear = useCallback(() => {
     // Nothing is stored server-side - /api/convert converts and returns, it never writes the
@@ -157,6 +202,30 @@ export default function Converter() {
     } finally { setPhase("idle"); setStep(null); }
   }, [file]);
 
+  /**
+   * Paste, from anywhere on the page rather than into a box.
+   *
+   * Copying a sheet off a search results page produces one of two things depending on how it
+   * was copied - the image itself on the clipboard, or its address as text - and there is no
+   * reason to make the reader know which they have. Both land here.
+   */
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      if (busy || fetching) return;
+      const items = e.clipboardData?.items ?? [];
+      for (const item of items) {
+        if (item.kind === "file" && item.type.startsWith("image/")) {
+          const f = item.getAsFile();
+          if (f) { e.preventDefault(); choose(f); return; }
+        }
+      }
+      const text = e.clipboardData?.getData("text/plain") ?? "";
+      if (looksLikeUrl(text)) { e.preventDefault(); void fromUrl(text); }
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, [busy, fetching, choose, fromUrl]);
+
   useEffect(() => {
     if (!zoom) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setZoom(false); };
@@ -183,7 +252,11 @@ export default function Converter() {
     onDragLeave: () => setOver(false),
     onDrop: (e: React.DragEvent) => {
       e.preventDefault(); setOver(false);
-      choose(e.dataTransfer.files?.[0] ?? null); // dropping onto the image replaces it
+      const file = e.dataTransfer.files?.[0];
+      if (file) { choose(file); return; }        // dropping onto the image replaces it
+      // Dragging a picture straight from another tab hands over its address, not its bytes.
+      const url = e.dataTransfer.getData("text/uri-list") || e.dataTransfer.getData("text/plain");
+      if (looksLikeUrl(url)) void fromUrl(url);
     },
   };
 
@@ -209,6 +282,9 @@ export default function Converter() {
               <strong className="text-ink-primary text-sm">Kéo thả ảnh bản nhạc vào đây</strong>
               <span className="text-xs text-ink-caption">
                 hoặc bấm để chọn file · PNG, JPEG, WebP · tối đa 20MB
+              </span>
+              <span className="text-xs text-brand-legible mt-1">
+                {fetching ? "Đang tải ảnh từ đường dẫn…" : "hoặc dán (Ctrl+V) link ảnh từ Google"}
               </span>
               {/* Advice that changes what you do, sitting with the instruction it qualifies.
                   The note about images not being stored is gone: it answered a question nobody
