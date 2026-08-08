@@ -13,6 +13,10 @@ export default {
   darkMode: ['selector', ':root[data-mode="dark"]'],
   theme: {
     extend: {
+      // The width at which the page margins can hold a 160px skyscraper without crowding the
+      // content: the 1024px column, plus 160 of ad and 2x16 of gap on each side. Below this
+      // the rails are hidden and the ad goes into the content flow instead.
+      screens: { rail: '1408px' },
       colors: {
         // - Semantic -
         canvas:        'rgb(var(--canvas) / <alpha-value>)',
@@ -68,16 +72,18 @@ export default {
         },
       },
 
-      // Indeterminate progress: conversion reports nothing, so the bar sweeps rather than
-      // pretending to know how far along it is.
+      // The waiting animation. Two wave layers slide at different speeds; each SVG holds TWO
+      // periods of the wave and is twice the width of its box, so translating by exactly -50%
+      // lands the second period where the first began and the loop is seamless.
       keyframes: {
-        sweep: {
-          '0%':   { marginLeft: '-35%' },
-          '100%': { marginLeft: '100%' },
+        wave: {
+          '0%':   { transform: 'translateX(0)' },
+          '100%': { transform: 'translateX(-50%)' },
         },
       },
       animation: {
-        sweep: 'sweep 1.1s ease-in-out infinite',
+        wave: 'wave 9s linear infinite',
+        'wave-slow': 'wave 15s linear infinite',
       },
 
       // Inter, everywhere - see src/app/layout.tsx for why it replaced Arial. The fallbacks

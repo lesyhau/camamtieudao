@@ -22,21 +22,35 @@ export default function Page() {
   return (
     <LegalPage title="Chính sách quyền riêng tư" updated="08/08/2026">
       <p className="lede">
-        Cảm âm Tiêu Dao là một công cụ dịch giản phổ sang cảm âm. Chúng tôi cố gắng thu thập
-        càng ít dữ liệu càng tốt, và trang này nói rõ phần còn lại: chúng tôi nhận gì, gửi đi
-        đâu và giữ lại trong bao lâu.
+        Chính sách này mô tả cách Cảm âm Tiêu Dao thu thập, sử dụng, chia sẻ và lưu trữ dữ liệu
+        khi bạn sử dụng dịch vụ tại camamtieudao.com, cùng phạm vi tham gia của các bên thứ ba
+        trong quá trình xử lý.
       </p>
 
-      <h2>Tóm tắt ngắn</h2>
+      <h2>Tóm tắt</h2>
       <ul>
-        <li>Ảnh bản nhạc bạn tải lên <strong>không được lưu lại</strong>. Ảnh chỉ tồn tại trong
-          bộ nhớ máy chủ trong lúc chuyển đổi, rồi biến mất khi phản hồi được gửi đi.</li>
-        <li>Chúng tôi <strong>không có tài khoản người dùng</strong>, không có cơ sở dữ liệu và
-          không đặt cookie nào.</li>
-        <li>Phần <em>lời bài hát</em> đọc được từ ảnh sẽ được gửi tới Google (Gemini) để ngắt
-          câu cho dễ đọc. Ảnh thì không.</li>
-        <li>Nhật ký máy chủ có ghi địa chỉ IP như mọi web server, và được xoá sau 14 ngày.</li>
+        <li>Ảnh bản nhạc tải lên <strong>không được lưu trữ</strong>. Ảnh chỉ tồn tại trong bộ
+          nhớ máy chủ trong thời gian xử lý và được giải phóng ngay sau khi trả kết quả.</li>
+        <li>Dịch vụ <strong>không có tài khoản người dùng</strong>, không sử dụng cơ sở dữ liệu
+          và không đặt cookie.</li>
+        <li>Phần lời bài hát nhận dạng được từ ảnh được gửi tới Google (Gemini API) để ngắt câu.
+          Ảnh gốc không được gửi đi.</li>
+        <li>Nhật ký máy chủ ghi nhận địa chỉ IP theo thông lệ vận hành và được xoá sau 14 ngày.</li>
       </ul>
+
+      <h2>Đơn vị vận hành</h2>
+      <p>
+        <strong>Lê Sỹ Hậu</strong><br />
+        Cá nhân phát triển phần mềm<br />
+        237/3 đường Hoà Bình<br />
+        Phường Phú Thạnh, Thành phố Hồ Chí Minh<br />
+        Việt Nam<br />
+        Email: <a href={`mailto:${contact}`}>{contact}</a>
+      </p>
+      <p>
+        Cảm âm Tiêu Dao là dự án cá nhân. Không có pháp nhân doanh nghiệp nào đứng sau dịch vụ
+        này, và người chịu trách nhiệm xử lý dữ liệu là cá nhân nêu trên.
+      </p>
 
       <h2>1. Ảnh bản nhạc bạn tải lên</h2>
       <p>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Trash2, Languages, ImageUp, Copy, Check, Loader2, X } from "lucide-react";
 import type { CamAmDoc } from "@/lib/camam/types.ts";
 import type { Polished } from "@/lib/polish/types.ts";
@@ -102,7 +102,7 @@ const PANEL =
   "w-full rounded-card relative aspect-[1/1.4142] " +
   "lg:aspect-auto lg:h-[calc(100dvh-14rem)] lg:min-h-[30rem]";
 
-export default function Converter({ aside }: { aside?: ReactNode }) {
+export default function Converter() {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [phase, setPhase] = useState<"idle" | "uploading" | "converting">("idle");
@@ -256,11 +256,6 @@ export default function Converter({ aside }: { aside?: ReactNode }) {
               </div>
             </>
           )}
-          {/* Under the sheet, in the space a full-height result panel leaves empty beside a
-              240px column. Only from `lg`: below that the grid is one column and anything
-              here would sit BETWEEN the image and the result, which is the one place an ad
-              would genuinely be in the way. */}
-          {aside}
         </section>
 
         <section aria-label="Kết quả" className="min-w-0 w-full">
@@ -304,16 +299,17 @@ export default function Converter({ aside }: { aside?: ReactNode }) {
                       : "text-ink-disabled cursor-not-allowed"
                 }`}
               >
+                {busy && <ConvertingWaves />}
                 {busy
-                  ? <Loader2 size={32} className="animate-spin" role="status" aria-hidden="true" />
+                  ? <Loader2 size={32} className="animate-spin relative" role="status" aria-hidden="true" />
                   : <Languages size={32} aria-hidden="true" />}
-                <span className="text-base font-bold">{busy ? "Hủy" : "Dịch"}</span>
+                <span className="relative text-base font-bold">{busy ? "Hủy" : "Dịch"}</span>
                 {/* The stage the server is on, streamed back as it happens. Twenty seconds of
                     a spinner and nothing else is indistinguishable from twenty seconds of
                     being stuck. Fixed height so naming a longer stage does not nudge the
                     layout under the pointer that is about to click Hủy. */}
                 {busy && (
-                  <span className="h-5 text-xs text-ink-caption">
+                  <span className="relative h-5 text-xs text-ink-caption">
                     {step ? STEP_LABEL[step] : "Đang gửi ảnh…"}
                   </span>
                 )}
@@ -405,6 +401,46 @@ function toPlainText(doc: CamAmDoc, mapping: string): string {
  * `text` is a thunk rather than a string so switching mapping or verse cannot leave the button
  * holding a stale copy of the score.
  */
+/**
+ * The waiting animation: two waves crossing the empty result panel.
+ *
+ * A spinner says "something is happening" and nothing else. Twenty seconds of a spinner and a
+ * changing label is still twenty seconds of a page that looks frozen between labels, and the
+ * conversion's longest stage is the one with the least to report. Slow water underneath gives
+ * the wait a pulse without claiming any progress it cannot measure.
+ *
+ * Each SVG is twice the width of the box and holds TWO periods of the same wave, so sliding it
+ * by exactly -50% puts the second period where the first started and the loop never seams. The
+ * two layers run at different speeds and opacities, which is what stops it reading as one flat
+ * shape sliding past. `prefers-reduced-motion` stops both - see globals.css.
+ */
+function ConvertingWaves() {
+  return (
+    <div aria-hidden="true" className="absolute inset-x-0 bottom-0 h-2/3 overflow-hidden pointer-events-none">
+      <svg
+        viewBox="0 0 400 60"
+        preserveAspectRatio="none"
+        className="absolute bottom-0 left-0 w-[200%] h-24 animate-wave-slow text-brand-solid/25"
+      >
+        <path fill="currentColor" d={WAVE_D} />
+      </svg>
+      <svg
+        viewBox="0 0 400 60"
+        preserveAspectRatio="none"
+        className="absolute bottom-0 left-0 w-[200%] h-16 animate-wave text-brand-accent/20"
+      >
+        <path fill="currentColor" d={WAVE_D} />
+      </svg>
+    </div>
+  );
+}
+
+// One period is 200 units wide; the path draws two of them and then closes down to the
+// baseline so it fills rather than strokes.
+const WAVE_D =
+  "M0 30 C 25 12 75 12 100 30 C 125 48 175 48 200 30 " +
+  "C 225 12 275 12 300 30 C 325 48 375 48 400 30 L400 60 L0 60 Z";
+
 function CopyButton({ text }: { text: () => string }) {
   const [done, setDone] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);

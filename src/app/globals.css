@@ -200,6 +200,13 @@
   }
 }
 
+/* Someone who has asked their system for less motion should not get a moving background
+   while they wait. The waves stop; the label and the spinner still say what is happening. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-wave,
+  .animate-wave-slow { animation: none; }
+}
+
 /* ================================================================
    MOTION - communicates state, never decoration.
    Durations match the app's own; see style guide section 8.

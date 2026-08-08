@@ -12,7 +12,7 @@ export interface AdsConfig {
   /** AdSense publisher id, `ca-pub-...`. */
   client: string;
   /** Per-position slot ids, created in the AdSense dashboard. */
-  slots: { sidebar: string; bottom: string };
+  slots: { railLeft: string; railRight: string; bottom: string };
   /** Where an advertiser writes to buy the space directly. */
   contact: string;
 }
@@ -21,7 +21,11 @@ export function adsConfig(): AdsConfig {
   return {
     client: process.env.ADSENSE_CLIENT ?? "",
     slots: {
-      sidebar: process.env.ADSENSE_SLOT_SIDEBAR ?? "",
+      // Two separate ids rather than one reused twice: AdSense reports per slot, and a single
+      // id rendered in two places on one page makes the two positions indistinguishable in the
+      // revenue report - which is the only way to learn which margin is worth keeping.
+      railLeft: process.env.ADSENSE_SLOT_RAIL_LEFT ?? "",
+      railRight: process.env.ADSENSE_SLOT_RAIL_RIGHT ?? "",
       bottom: process.env.ADSENSE_SLOT_BOTTOM ?? "",
     },
     contact: process.env.ADS_CONTACT_EMAIL || "camamtieudao@outlook.com",

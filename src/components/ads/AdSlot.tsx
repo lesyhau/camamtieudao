@@ -20,7 +20,7 @@ export interface AdSlotProps {
   /** AdSense slot id for this position. Empty renders the self-advertisement. */
   slot?: string;
   /** What the reserved box looks like, and what AdSense is asked for. */
-  shape: "banner" | "panel";
+  shape: "banner" | "panel" | "rail";
   className?: string;
   /** Where an advertiser writes. */
   contact: string;
@@ -35,6 +35,9 @@ const SHAPE = {
   banner: "w-full min-h-[100px] lg:min-h-[90px]",
   // Fills the dead space beside a wide result panel. Roughly a 240x300 rectangle.
   panel: "w-full min-h-[250px]",
+  // A 160x600 wide skyscraper in the page margin. Only rendered where the margin is genuinely
+  // wide enough for it - see page.tsx.
+  rail: "w-40 min-h-[600px]",
 } as const;
 
 declare global {

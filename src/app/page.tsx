@@ -30,31 +30,36 @@ export default function Home() {
         </section>
 
         <section className="max-w-5xl mx-auto px-4 sm:px-6 pb-16 sm:pb-20">
-          <Converter
-            aside={
-              <AdSlot
-                client={ads.client}
-                slot={ads.slots.sidebar}
-                shape="panel"
-                contact={ads.contact}
-                className="hidden lg:flex mt-4"
-              />
-            }
-          />
+          <Converter />
 
-          {/* After the work, before the footer. The one horizontal position that is on the
-              path out of the page rather than across it - on every size, because it is the
-              only slot a phone gets. */}
+          {/* Below `rail` there is no margin to put an ad in, so it goes into the flow - after
+              the work, before the footer, which is on the way out of the page rather than
+              across it. Above `rail` the margins take over and this disappears, so a wide
+              screen never has an ad inside the content column at all. */}
           <AdSlot
             client={ads.client}
             slot={ads.slots.bottom}
             shape="banner"
             contact={ads.contact}
-            className="mt-8"
+            className="mt-8 rail:hidden"
           />
         </section>
       </main>
       <Footer />
+
+      {/* The margins, on screens wide enough to have them. Fixed and vertically centred, so
+          they stay put while the page scrolls and never enter the reading column. Hidden
+          entirely below 1408px - see the `rail` screen in tailwind.config.ts - because a
+          skyscraper squeezed into a narrow margin is worse than no skyscraper.
+          z-30 keeps them under the header (z-50) rather than sliding over it. */}
+      <div className="hidden rail:block" aria-hidden={false}>
+        <div className="fixed left-4 top-1/2 -translate-y-1/2 z-30">
+          <AdSlot client={ads.client} slot={ads.slots.railLeft} shape="rail" contact={ads.contact} />
+        </div>
+        <div className="fixed right-4 top-1/2 -translate-y-1/2 z-30">
+          <AdSlot client={ads.client} slot={ads.slots.railRight} shape="rail" contact={ads.contact} />
+        </div>
+      </div>
     </>
   );
 }
