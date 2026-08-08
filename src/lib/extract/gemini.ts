@@ -24,6 +24,15 @@ export interface GenerateOptions {
   /** 0 for transcription. This is a reading task; sampling invents notes. */
   temperature?: number;
   maxOutputTokens?: number;
+  /**
+   * Thinking tokens to allow. 0 turns reasoning off.
+   *
+   * It is not free and it is not always an improvement: on the polish prompt, leaving it on
+   * cost 2739 thinking tokens and 8 extra seconds, and the model used them to append a section
+   * of its own commentary. Omit to leave the model's default alone - a reading task over an
+   * image genuinely wants it.
+   */
+  thinkingBudget?: number;
   signal?: AbortSignal;
   /** Called with each incremental text fragment as it arrives. */
   onChunk?: (text: string) => void;
@@ -94,6 +103,7 @@ export async function generate(cfg: GeminiConfig, opts: GenerateOptions): Promis
     generationConfig: {
       temperature: opts.temperature ?? 0,
       maxOutputTokens: opts.maxOutputTokens ?? 65536,
+      ...(opts.thinkingBudget === undefined ? {} : { thinkingConfig: { thinkingBudget: opts.thinkingBudget } }),
     },
   };
 

@@ -1,10 +1,12 @@
 // The parts of "make it human-friendly" that are decidable from data, done in code.
 //
 // The first attempt asked one model call to do all four jobs at once - segment by sentence,
-// drop repeated notes, merge the verses, name the sections. Measured on the reference song,
-// gemini-3.5-flash-lite kept 394 of 419 notes (so it collapsed almost nothing), produced one
-// phrase per printed line rather than per sentence, and copied the `a/b` verse notation
-// straight into the words: `个/们 世/命 界/运`.
+// drop repeated notes, merge the verses, name the sections - and was shown the notes to do it
+// with. Measured on the reference song, gemini-3.5-flash-lite kept 394 of 419 notes (so it
+// collapsed almost nothing), produced one phrase per printed line rather than per sentence, and
+// copied the `a/b` verse notation straight into the words: `个/们 世/命 界/运`. gemini-3.5-flash
+// did not answer at all: 2368 input tokens of notes and instructions, and it spent its whole
+// budget thinking (finish=MAX_TOKENS). Both recovered completely once the job got smaller.
 //
 // Two of those four jobs are not judgement calls at all:
 //

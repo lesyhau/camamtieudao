@@ -15,19 +15,31 @@ import { tokenOf } from "./token.ts";
 export type { Polished, PolishedLine, PolishedSection } from "./types.ts";
 
 /**
- * Flash-class by default, and `-lite` specifically.
+ * gemini-3.5-flash with thinking OFF.
  *
- * Measured on the reference song: `gemini-3.5-flash` spent its whole output budget thinking
- * and returned nothing usable (finish=MAX_TOKENS after 324 tokens, 29s); `gemini-3.5-flash-lite`
- * answered in 5.6s. This is a text-shaping job over a few hundred words - the reasoning models
- * have nothing to reason about here, and pay for the privilege.
+ * An earlier note here blamed the model for returning nothing. That was wrong, and the record
+ * is worth keeping straight: the failure came from the FIRST prompt, which handed the model the
+ * notes as well and asked for four jobs at once - 2368 input tokens of them. On this prompt the
+ * identical model and settings finish cleanly.
+ *
+ * Thinking is off because it measured worse here, not merely slower. All three candidates
+ * phrase the reference song identically; the difference is what they do with the leftovers:
+ *
+ *   flash, thinking on    9.9s   2739 thinking tokens   invents a "Thông tin thêm" section
+ *   flash, thinking off   2.0s      0                   clean
+ *   flash-lite            1.5s      0                   clean
+ *
+ * Reasoning has nothing to reason about in "put a line break where the sentence ends", and
+ * given the budget it finds something else to do with it. It is not even stable: two runs at
+ * temperature 0 with thinking on split the same song into 20 phrases and then 38. With it off,
+ * the same run twice is the same answer twice, which is what a cache and a user both expect.
  */
 export function polishConfigFromEnv(): GeminiConfig | null {
   const apiKey = process.env.POLISH_API_KEY || process.env.LLM_API_KEY;
   if (!apiKey) return null;
   return {
     apiKey,
-    model: process.env.POLISH_MODEL || "gemini-3.5-flash-lite",
+    model: process.env.POLISH_MODEL || "gemini-3.5-flash",
     baseUrl: process.env.POLISH_BASE_URL || process.env.LLM_BASE_URL || undefined,
   };
 }
@@ -56,6 +68,7 @@ export async function polish(doc: CamAmDoc, cfg = polishConfigFromEnv()): Promis
       // as the same song split differently on two runs.
       temperature: 0,
       maxOutputTokens: 8192,
+      thinkingBudget: Number(process.env.POLISH_THINKING_BUDGET ?? 0),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
     const sections = parseSections(res.text);
