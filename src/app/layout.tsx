@@ -1,21 +1,34 @@
 import type { ReactNode } from "react";
+import { Inter } from "next/font/google";
 import { ThemeProvider, MODE_INIT_SCRIPT } from "@/components/providers/ThemeProvider";
 import { SiteBackground } from "@/components/ui/SiteBackground";
 import "./globals.css";
 
-// No webfont at all - the type is Arial, declared in tailwind.config.ts. Both of Proxyma's
-// faces are gone: Orbitron because Google publishes it `latin`-only and it cannot spell
-// "Cảm âm Tiêu Dao", Space Grotesk because Arial replaces it. Nothing is downloaded, so there
-// is no font swap and text renders in its final face on the first frame.
+// Inter, replacing Arial.
+//
+// Arial cost nothing to load but is a poor reading face at the sizes this page actually uses.
+// Almost everything here is 12px and 14px, and Arial's closed apertures and narrow spacing are
+// hardest to read exactly there. Inter was drawn for screen UI at small sizes - taller x-height,
+// open apertures - and it carries the `vietnamese` subset, which is the constraint that ruled
+// out Orbitron for the wordmark and Lato and Figtree for this.
+//
+// One variable file covers every weight, self-hosted by next/font, so there is no request to
+// Google at run time and no second file for bold.
+const inter = Inter({
+  subsets: ["latin", "vietnamese"],
+  variable: "--font-ui",
+  display: "swap",
+});
 
 export const metadata = {
   title: "Cảm âm Tiêu Dao",
   description: "Cảm âm nhạc Hoa chất lượng cao. Đọc giản phổ (简谱) từ ảnh và dịch sang cảm âm cho sáo, tiêu.",
-  // The tab icon is the same two inks as the mark in the page, not a third compromise colour.
-  // Declared here rather than as src/app/icon.png because a file-based icon is a single file
-  // with no way to express a mode. `media` covers the OS preference before any script runs;
-  // ThemeProvider re-points these when the site's own toggle moves, which the OS query cannot
-  // see. Both are listed so a browser that ignores `media` still gets a working icon.
+  // The tab icon follows the SYSTEM colour scheme, not the site's own toggle - a favicon sits
+  // in browser chrome, and browser chrome is painted by the OS preference, so matching the OS
+  // is what makes it disappear into the tab strip.
+  //
+  // Declared here rather than as src/app/icon.png because a file-based icon is one file with no
+  // way to express a mode. Both are listed so a browser that ignores `media` still gets an icon.
   icons: {
     icon: [
       { url: "/icon-light.png", media: "(prefers-color-scheme: light)", type: "image/png" },
@@ -28,7 +41,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   // data-mode is stamped by the inline script below before first paint; the "dark" here is
   // only the pre-script fallback for a browser with JS disabled, matching the :root defaults.
   return (
-    <html lang="vi" data-mode="dark" suppressHydrationWarning>
+    <html lang="vi" data-mode="dark" className={inter.variable} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: MODE_INIT_SCRIPT }} />
       </head>

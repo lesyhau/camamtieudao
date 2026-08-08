@@ -92,9 +92,15 @@ const SHEET = "aspect-[1/1.4142] w-full rounded-card relative flex items-center 
 
 // The result panel only borrowed A4 so the empty placeholder matched the sheet beside it. Now
 // that it is three times the width, keeping the ratio made it 1018px tall - taller than the
-// viewport, for content that scrolls anyway. Stacked on a phone it still matches the sheet
-// above it; side by side it takes a fixed height that fits a laptop screen whole.
-const PANEL = "w-full rounded-card relative aspect-[1/1.4142] lg:aspect-auto lg:h-[40rem]";
+// viewport, for content that scrolls anyway.
+//
+// Side by side it takes the screen instead: 100dvh less the header, the hero and a little air
+// below (14rem measured against the real layout), with a floor so a short laptop window does
+// not squeeze it to nothing. dvh rather than vh so a phone's collapsing URL bar does not leave
+// the panel overhanging. Stacked on a phone it still matches the sheet above it.
+const PANEL =
+  "w-full rounded-card relative aspect-[1/1.4142] " +
+  "lg:aspect-auto lg:h-[calc(100dvh-14rem)] lg:min-h-[30rem]";
 
 export default function Converter() {
   const [file, setFile] = useState<File | null>(null);
