@@ -1,4 +1,5 @@
 import { BrandLockup } from '@/components/ui/BrandLogo'
+import { SupportDialog, SupportLink } from '@/components/ui/Support'
 
 const LINK =
   'block w-fit text-xs mb-2 text-brand-legible hover:opacity-80 hover:underline underline-offset-[3px] transition-opacity focus-ring rounded-sm'
@@ -35,6 +36,8 @@ export function Footer() {
               <a href="https://www.facebook.com/le.sy.hau.110994" target="_blank" rel="noopener noreferrer" className={LINK}>
                 Facebook · Lê Sỹ Hậu
               </a>
+              {/* Opens the dialog rather than navigating - the QR is a panel, not a page. */}
+              <SupportLink className={`${LINK} text-left`} />
             </div>
             <div>
               <h4 className={HEADING}>Hỗ trợ</h4>
@@ -49,6 +52,10 @@ export function Footer() {
             </div>
           </div>
         </div>
+
+        {/* Mounted here so the link works from any page, with or without a conversion on
+            screen. It renders nothing until opened. */}
+        <SupportDialog />
 
         <div className="border-t border-line pt-6">
           <p className="text-xs text-ink-disabled">

@@ -32,6 +32,17 @@ export interface Unit {
 export const bare = (s: string): string => s.replace(/[\s\p{P}]+/gu, "");
 
 /**
+ * Chinese sheets usually carry a credit line along the bottom - a website, a QQ group, a
+ * transcriber's name - and it sits close enough to the last stave that the reader can take it
+ * for a lyric row. It then arrives here as "words" like `ht t p：` and `wwwqupu comspace`.
+ *
+ * Only patterns that are unambiguous are dropped: a URL fragment, or a long run of digits. A
+ * bare latin word is NOT dropped, because a lyric can legitimately contain one.
+ */
+const JUNK = /https?|www\.|\.com|\.cn|comspace|\d{5,}/i;
+const isJunk = (syllable: string): boolean => JUNK.test(syllable);
+
+/**
  * The song as a list of syllables, verses merged and repeats inside a syllable collapsed.
  *
  * Rests survive: a rest is a thing you do, not a repeat of the note before it.
@@ -58,7 +69,8 @@ export function units(doc: CamAmDoc): Unit[] {
     const starts = n.group !== currentGroup;
     if (starts) {
       currentGroup = n.group;
-      const syllable = lyricOf(n.group);
+      const raw = lyricOf(n.group);
+      const syllable = isJunk(raw) ? "" : raw;
       // Consecutive unsung notes stay in one run rather than becoming one unit each.
       if (!syllable && current && !current.syllable) {
         // fall through and append to the run in progress
@@ -85,10 +97,19 @@ export const sungText = (us: Unit[]): string =>
   us.filter((u) => u.syllable).map((u) => u.syllable).join(" ");
 
 export interface Phrase {
-  /** The words as the model grouped them, or as the fallback grouped them. */
-  lyric: string;
-  notes: Note[];
+  /**
+   * The units of this phrase, in order. Keeping units rather than a flat note list plus a
+   * separate lyric string is what makes the pairing renderable: a word belongs to the note it
+   * starts on, and the notes after it in the same unit are that word held.
+   */
+  units: Unit[];
 }
+
+/** Every note of a phrase, in order. */
+export const phraseNotes = (p: Phrase): Note[] => p.units.flatMap((u) => u.notes);
+/** The words of a phrase as one line of text. */
+export const phraseLyric = (p: Phrase): string =>
+  p.units.map((u) => u.syllable).filter(Boolean).join(" ");
 export interface Composed {
   title: string;
   phrases: Phrase[];
@@ -109,25 +130,27 @@ export function compose(us: Unit[], sections: { title: string; lines: string[] }
   const out: Composed[] = [];
   let i = 0;                      // cursor into `us`
 
-  /** Absorb any unsung units at the cursor, returning their notes. */
-  const drainUnsung = (): Note[] => {
-    const notes: Note[] = [];
-    while (i < us.length && !us[i].syllable) notes.push(...us[i++].notes);
-    return notes;
+  /** Absorb any unsung units at the cursor. */
+  const drainUnsung = (into: Unit[]): void => {
+    while (i < us.length && !us[i].syllable) into.push(us[i++]);
   };
 
-  const lead = drainUnsung();
-  if (lead.length) out.push({ title: "Dạo đầu", phrases: [{ lyric: "", notes: lead }] });
+  const lead: Unit[] = [];
+  drainUnsung(lead);
+  if (lead.length) out.push({ title: "Dạo đầu", phrases: [{ units: lead }] });
 
   for (const sec of sections) {
     const phrases: Phrase[] = [];
     for (const line of sec.lines) {
       const tokens = line.split(/\s+/).filter(Boolean);
-      const notes: Note[] = [];
-      const words: string[] = [];
+      const units: Unit[] = [];
       for (const tok of tokens) {
         const want = bare(tok);
         if (!want) continue;
+        // Rests and instrumental runs BEFORE a word belong with it. Draining them here rather
+        // than after each word is what stops a phrase ending on a dash: whatever follows the
+        // last word waits for the next phrase to claim it.
+        drainUnsung(units);
         // Look a little way ahead: a syllable the model split or joined differently should not
         // desynchronise everything after it.
         let hit = -1;
@@ -135,22 +158,20 @@ export function compose(us: Unit[], sections: { title: string; lines: string[] }
           if (us[k].syllable && bare(us[k].syllable) === want) { hit = k; break; }
         }
         if (hit === -1) continue;               // not in the song here - drop the word
-        while (i <= hit) { notes.push(...us[i].notes); i++; }
-        words.push(us[hit].syllable);
-        notes.push(...drainUnsung());
+        while (i <= hit) units.push(us[i++]);
       }
-      if (notes.length) phrases.push({ lyric: words.join(" "), notes });
+      if (units.length) phrases.push({ units });
     }
     if (phrases.length) out.push({ title: sec.title, phrases });
   }
 
   // Anything the model never mentioned still belongs to the song.
-  const rest: Note[] = [];
-  while (i < us.length) rest.push(...us[i++].notes);
+  const rest: Unit[] = [];
+  while (i < us.length) rest.push(us[i++]);
   if (rest.length) {
     const last = out[out.length - 1];
-    if (last) last.phrases.push({ lyric: "", notes: rest });
-    else out.push({ title: "", phrases: [{ lyric: "", notes: rest }] });
+    if (last) last.phrases.push({ units: rest });
+    else out.push({ title: "", phrases: [{ units: rest }] });
   }
 
   return out;
@@ -166,9 +187,8 @@ export function composeByLine(us: Unit[]): Composed[] {
   const byLine = new Map<number, Phrase>();
   for (const u of us) {
     const line = u.notes[0].line;
-    const p = byLine.get(line) ?? { lyric: "", notes: [] };
-    p.notes.push(...u.notes);
-    if (u.syllable) p.lyric = p.lyric ? `${p.lyric} ${u.syllable}` : u.syllable;
+    const p = byLine.get(line) ?? { units: [] };
+    p.units.push(u);
     byLine.set(line, p);
   }
   const phrases = [...byLine.entries()].sort((a, b) => a[0] - b[0]).map(([, p]) => p);

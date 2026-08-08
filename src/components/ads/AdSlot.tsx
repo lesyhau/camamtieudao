@@ -35,9 +35,11 @@ const SHAPE = {
   banner: "w-full min-h-[100px] lg:min-h-[90px]",
   // Fills the dead space beside a wide result panel. Roughly a 240x300 rectangle.
   panel: "w-full min-h-[250px]",
-  // A 160x600 wide skyscraper in the page margin. Only rendered where the margin is genuinely
-  // wide enough for it - see page.tsx.
-  rail: "w-40 min-h-[600px]",
+  // The page margin. 160x600 where the margin only just fits one, growing to a 300x600
+  // half-page where there is room - which is the size that actually balances a 1024px column
+  // on a wide monitor, and the better-paying unit. Both are standard IAB sizes, so AdSense has
+  // real inventory for them.
+  rail: "w-40 railxl:w-[300px] min-h-[600px] railxl:min-h-[600px]",
 } as const;
 
 declare global {

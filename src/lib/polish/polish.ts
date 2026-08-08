@@ -9,7 +9,7 @@ import { generate, type GeminiConfig } from "../extract/gemini.ts";
 import type { CamAmDoc } from "../camam/types.ts";
 import type { Polished, PolishedSection } from "./types.ts";
 import { SYSTEM, parseSections } from "./prompt.ts";
-import { compose, composeByLine, sungText, units, type Composed } from "./compose.ts";
+import { compose, composeByLine, phraseNotes, sungText, units, type Composed } from "./compose.ts";
 import { tokenOf } from "./token.ts";
 
 export type { Polished, PolishedLine, PolishedSection } from "./types.ts";
@@ -78,7 +78,7 @@ export async function polish(doc: CamAmDoc, cfg = polishConfigFromEnv()): Promis
     }
     const composed = compose(us, sections);
     // A model that answered with something unrelated aligns almost nothing back onto the song.
-    const matched = composed.reduce((n, s) => n + s.phrases.reduce((m, p) => m + p.notes.length, 0), 0);
+    const matched = composed.reduce((n, s) => n + s.phrases.reduce((m, p) => m + phraseNotes(p).length, 0), 0);
     if (matched < doc.notes.length * 0.5) {
       console.warn(`[polish] only ${matched}/${doc.notes.length} notes aligned; using the sheet's own lines`);
       return fallback("local");
@@ -92,5 +92,11 @@ export async function polish(doc: CamAmDoc, cfg = polishConfigFromEnv()): Promis
 
 const toSection = (c: Composed): PolishedSection => ({
   title: c.title,
-  lines: c.phrases.map((p) => ({ tokens: p.notes.map(tokenOf), lyric: p.lyric })),
+  // One cell per note. The word sits on the note it starts on; the rest of that unit's notes
+  // carry an empty syllable, which is how a held word is drawn.
+  lines: c.phrases.map((p) => ({
+    cells: p.units.flatMap((u) =>
+      u.notes.map((n, k) => ({ token: tokenOf(n), syllable: k === 0 ? u.syllable : "" })),
+    ),
+  })),
 });

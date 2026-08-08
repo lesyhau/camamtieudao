@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Trash2, Languages, ImageUp, Copy, Check, Loader2, X } from "lucide-react";
+import { Trash2, Languages, ImageUp, Copy, Check, Loader2 } from "lucide-react";
 import type { CamAmDoc } from "@/lib/camam/types.ts";
 import type { Polished } from "@/lib/polish/types.ts";
 import type { Step } from "@/lib/pipeline.ts";
 import { renderPolished, renderToken } from "@/lib/polish/render.ts";
 import { Badge, BadgeToggle } from "@/components/ui/Badge";
+import { SupportCard } from "@/components/ui/Support";
 
 interface Result { doc: CamAmDoc; polished: Polished | null; ms: number }
 
@@ -112,7 +113,6 @@ export default function Converter() {
   const [zoom, setZoom] = useState(false);
   const [mapping, setMapping] = useState<string | null>(null);
   const [verse, setVerse] = useState(1);
-  const [support, setSupport] = useState(true);
   const [step, setStep] = useState<Step | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const inflight = useRef<{ xhr?: XMLHttpRequest }>({});
@@ -149,7 +149,7 @@ export default function Converter() {
         // server reads the sheet. Saying so is the difference between "slow" and "stuck".
         if (p >= 100) setPhase("converting");
       }, setStep, inflight.current);
-      setResult(r); setMapping(null); setVerse(1); setSupport(true);
+      setResult(r); setMapping(null); setVerse(1);
     } catch (e) {
       if ((e as DOMException)?.name !== "AbortError") {
         setError(e instanceof Error ? e.message : "Chuyển đổi thất bại.");
@@ -278,8 +278,9 @@ export default function Converter() {
                 </div>
                 <CopyButton text={() => result?.polished ? renderPolished(result.polished, doc, active) : toPlainText(doc, active)} />
                 {/* Only after a conversion lands: asking before the tool has done anything for
-                    someone is asking a stranger. */}
-                {support && <SupportCard onClose={() => setSupport(false)} />}
+                    someone is asking a stranger. It collapses to its title rather than closing,
+                    so a reader who wants the score behind it can still get back. */}
+                <SupportCard />
               </>
             ) : (
               /* The empty result panel is the convert button. One control, in the place the
@@ -487,67 +488,6 @@ function CopyButton({ text }: { text: () => string }) {
   );
 }
 
-/**
- * The tip jar, over the lower right of the result.
- *
- * The QR is a VietQR/napas payment code, so it is NOT generated here - a wrong CRC or a wrong
- * account field in a payment code sends someone's money nowhere, and that is not a thing to
- * reconstruct from a screenshot. It is a file, `public/qr-ung-ho.png`. If that file is missing
- * the card degrades to the account details in text, which are the same instruction in a slower
- * form, rather than showing a broken image on a payment prompt.
- */
-function SupportCard({ onClose }: { onClose: () => void }) {
-  const [qrFailed, setQrFailed] = useState(false);
-
-  return (
-    <aside
-      aria-label="Ủng hộ Cảm âm Tiêu Dao"
-      className="absolute bottom-2 right-2 left-2 sm:left-auto z-20 max-w-xs sm:max-w-none sm:w-64 mx-auto sm:mx-0 rounded-card border border-line bg-canvas/95 backdrop-blur-md shadow-card-lg p-3"
-    >
-      <button
-        type="button"
-        onClick={onClose}
-        aria-label="Đóng"
-        title="Đóng"
-        className="absolute top-1 right-1 w-7 h-7 rounded-full flex items-center justify-center text-ink-disabled hover:bg-ink-caption/10 hover:text-ink-primary transition-colors focus-ring"
-      >
-        <X size={14} aria-hidden="true" />
-      </button>
-
-      <h3 className="text-sm font-bold text-ink-primary pr-6 mb-1">Ủng hộ Cảm âm Tiêu Dao</h3>
-      <p className="text-xs text-ink-caption leading-snug mb-2">
-        Cảm âm Tiêu Dao sẽ luôn là một công cụ hoàn toàn miễn phí! Nếu bạn thấy hữu ích, hãy ủng hộ mình chút đỉnh để phụ giúp tiền duy trì máy chủ và tiếp thêm động lực cho mình ra thêm nhiều bản cảm âm mới nhé.
-      </p>
-
-      {/* The QR and the name share one fixed-width column, so the name is exactly as wide as
-          the code above it and reads as its caption. 176px rather than the card's full inner
-          width: at full width the card ran to ~420px of a 679px panel, which is more of the
-          result covered than a tip jar has earned. */}
-      <div className="w-32 sm:w-44 mx-auto">
-        {!qrFailed && (
-          /* The white padding is the QUIET ZONE, not decoration. The exported PNG is cropped
-             flush to the code, and a QR needs clear margin around it to be found at all - on a
-             dark card, with none, the finder patterns run straight into the background. */
-          <div className="bg-white rounded-md p-2.5">
-            {/* eslint-disable-next-line @next/next/no-img-element -- a static asset at a fixed size */}
-            <img
-              src="/qr-ung-ho.png"
-              alt="Mã QR chuyển khoản Vietcombank"
-              onError={() => setQrFailed(true)}
-              className="w-full block"
-            />
-          </div>
-        )}
-        <div className="w-full text-center mt-2">
-          <p className="text-xs font-bold text-ink-primary tracking-wide">LE SY HAU</p>
-          <p className="text-xs text-ink-caption tabular-nums">0181003535874</p>
-          <p className="text-xs text-ink-disabled">Vietcombank</p>
-        </div>
-      </div>
-    </aside>
-  );
-}
-
 function ResultPanel({ doc, polished, mapping, recommended, setMapping, verse, setVerse }: {
   doc: CamAmDoc;
   polished: Polished | null;
@@ -620,9 +560,24 @@ function PolishedScore({ doc, polished, mapping }: { doc: CamAmDoc; polished: Po
           )}
           <div className="space-y-3">
             {sec.lines.map((line, j) => (
-              <div key={j}>
-                <p className="text-ink-primary leading-6">{line.tokens.map((t) => renderToken(t, doc, mapping)).join(" ")}</p>
-                {line.lyric && <p className="text-xs text-ink-caption leading-5">{line.lyric}</p>}
+              /* A row of columns, not two lines of text. Each note is its own cell with its
+                 word underneath, so the pairing is visible and a word held across a pitch
+                 change simply has empty cells after it - rather than the two rows drifting
+                 apart, which is what happens when the notes and the words are printed as two
+                 independent runs of different lengths. */
+              <div key={j} data-phrase className="flex flex-wrap items-start gap-x-1 gap-y-2">
+                {line.cells.map((cell, k) => (
+                  <span key={k} className="flex flex-col items-center min-w-[2rem]">
+                    <span className={`h-6 leading-6 whitespace-nowrap ${
+                      cell.token === "0" ? "text-ink-disabled" : "text-ink-primary"
+                    }`}>
+                      {renderToken(cell.token, doc, mapping)}
+                    </span>
+                    <span className="h-5 leading-5 text-xs text-ink-caption whitespace-nowrap">
+                      {cell.syllable}
+                    </span>
+                  </span>
+                ))}
               </div>
             ))}
           </div>

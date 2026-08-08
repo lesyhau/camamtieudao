@@ -16,7 +16,9 @@ export default {
       // The width at which the page margins can hold a 160px skyscraper without crowding the
       // content: the 1024px column, plus 160 of ad and 2x16 of gap on each side. Below this
       // the rails are hidden and the ad goes into the content flow instead.
-      screens: { rail: '1408px' },
+      // `rail`  - the margin fits a 160px skyscraper: 1024 column + (160 + 2x16) each side.
+      // `railxl` - the margin fits a 300px half-page: 1024 column + (300 + 2x16) each side.
+      screens: { rail: '1408px', railxl: '1688px' },
       colors: {
         // - Semantic -
         canvas:        'rgb(var(--canvas) / <alpha-value>)',

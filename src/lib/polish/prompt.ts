@@ -21,9 +21,13 @@ Việc của bạn:
    Câu lặp lại gần như nguyên văn ở nhiều chỗ thường là điệp khúc.
 
 Quy tắc bắt buộc:
-- CHÉP LẠI ĐÚNG từng tiếng như đầu vào, đúng thứ tự, không thiếu, không thêm, không sửa chữ.
-- Không dịch, không phiên âm, không thêm dấu câu mới.
-- Chỉ được thêm ký hiệu xuống dòng và tên đoạn.
+- CHÉP LẠI ĐÚNG từng tiếng như đầu vào, đúng thứ tự, không thiếu một tiếng nào, không thêm
+  tiếng nào, không sửa chữ. Ghép tất cả các dòng kết quả lại phải ra đúng chuỗi đầu vào.
+- MỖI TIẾNG ĐỨNG RIÊNG, cách nhau đúng một dấu cách. Không nối hai tiếng bằng dấu gạch nối,
+  không dùng gạch nối ở cuối dòng, không thêm dấu gạch nào.
+- Giữ nguyên dấu câu đã có, dính liền với tiếng đứng trước nó. Không thêm dấu câu mới.
+- Không dịch, không phiên âm, không chú thích, không viết gì ngoài định dạng bên dưới.
+- Chỉ được thêm chỗ xuống dòng và tên đoạn.
 
 Định dạng trả lời, không thêm gì khác:
 

@@ -33,8 +33,12 @@ export function renderPolished(polished: Polished, doc: CamAmDoc, mapping: strin
     body.push("");
     if (sec.title) body.push(`## ${sec.title}`);
     for (const line of sec.lines) {
-      body.push(line.tokens.map((t) => renderToken(t, doc, mapping)).join(" "));
-      if (line.lyric) body.push(line.lyric);
+      // Plain text cannot hold a column, so the two rows go back to two lines here - but they
+      // are generated from the same cells, so the words are in the same order as the notes
+      // they belong to.
+      body.push(line.cells.map((c) => renderToken(c.token, doc, mapping)).join(" "));
+      const lyric = line.cells.map((c) => c.syllable).filter(Boolean).join(" ");
+      if (lyric) body.push(lyric);
       body.push("");
     }
   }

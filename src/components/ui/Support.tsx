@@ -1,0 +1,159 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { Heart, X, ChevronUp } from "lucide-react";
+
+export const SUPPORT_TITLE = "Ủng hộ Cảm âm Tiêu Dao";
+const BLURB =
+  "Cảm âm Tiêu Dao sẽ luôn là một công cụ hoàn toàn miễn phí! Nếu bạn thấy hữu ích, hãy ủng hộ " +
+  "mình chút đỉnh để phụ giúp tiền duy trì máy chủ và tiếp thêm động lực cho mình ra thêm nhiều " +
+  "bản cảm âm mới nhé.";
+
+/** The event the footer link fires to open the dialog from anywhere on the page. */
+export const OPEN_SUPPORT = "camam:open-support";
+export const openSupport = () => window.dispatchEvent(new CustomEvent(OPEN_SUPPORT));
+
+/**
+ * The blurb and the transfer code.
+ *
+ * No name, account number or bank underneath any more: the exported QR is a full VietQR card
+ * that already prints all three, and repeating them below only invited the two to disagree the
+ * next time the image is replaced.
+ */
+function SupportBody() {
+  const [failed, setFailed] = useState(false);
+  return (
+    <>
+      <p className="text-xs text-ink-caption leading-snug mb-3">{BLURB}</p>
+      {failed ? (
+        // The card carries the account details, so losing it loses the instructions too.
+        <p className="text-xs text-ink-caption">
+          Vietcombank · <span className="tabular-nums">0181003535874</span> · LE SY HAU
+        </p>
+      ) : (
+        /* eslint-disable-next-line @next/next/no-img-element -- a static asset */
+        <img
+          src="/qr-ung-ho.png"
+          alt="Mã QR chuyển khoản ủng hộ Cảm âm Tiêu Dao"
+          onError={() => setFailed(true)}
+          className="w-40 mx-auto rounded-md block"
+        />
+      )}
+    </>
+  );
+}
+
+/**
+ * The card over the result panel.
+ *
+ * It COLLAPSES rather than closes. Dismissing it outright meant a reader who shut it to see the
+ * score behind had no way back short of converting again; collapsed to its title bar it stays
+ * one click away and costs a strip of the panel instead of half of it.
+ */
+export function SupportCard() {
+  const [open, setOpen] = useState(true);
+
+  // The footer link opens this one too, when a result is on screen.
+  useEffect(() => {
+    const onOpen = () => setOpen(true);
+    window.addEventListener(OPEN_SUPPORT, onOpen);
+    return () => window.removeEventListener(OPEN_SUPPORT, onOpen);
+  }, []);
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="absolute bottom-2 right-2 z-20 inline-flex items-center gap-2 rounded-card border border-line
+          bg-canvas/95 backdrop-blur-md shadow-card px-3 py-2 text-xs font-bold text-ink-primary
+          hover:border-brand-solid transition-colors focus-ring"
+      >
+        <Heart size={14} className="text-brand-legible" aria-hidden="true" />
+        {SUPPORT_TITLE}
+        <ChevronUp size={14} className="text-ink-disabled" aria-hidden="true" />
+      </button>
+    );
+  }
+
+  return (
+    <aside
+      aria-label={SUPPORT_TITLE}
+      className="absolute bottom-2 right-2 left-2 sm:left-auto z-20 max-w-xs sm:max-w-none sm:w-64
+        mx-auto sm:mx-0 rounded-card border border-line bg-canvas/95 backdrop-blur-md shadow-card-lg p-3"
+    >
+      <button
+        type="button"
+        onClick={() => setOpen(false)}
+        aria-label="Thu gọn"
+        title="Thu gọn"
+        className="absolute top-1 right-1 w-7 h-7 rounded-full flex items-center justify-center
+          text-ink-disabled hover:bg-ink-caption/10 hover:text-ink-primary transition-colors focus-ring"
+      >
+        <X size={14} aria-hidden="true" />
+      </button>
+      <h3 className="text-sm font-bold text-ink-primary pr-6 mb-1">{SUPPORT_TITLE}</h3>
+      <SupportBody />
+    </aside>
+  );
+}
+
+/**
+ * The same content as a dialog, for the footer link - which has to work whether or not a
+ * conversion is on screen, so it cannot rely on the card above being mounted.
+ */
+export function SupportDialog() {
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const onOpen = () => setOpen(true);
+    window.addEventListener(OPEN_SUPPORT, onOpen);
+    return () => window.removeEventListener(OPEN_SUPPORT, onOpen);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      role="presentation"
+      onClick={() => setOpen(false)}
+      className="fixed inset-0 z-[70] bg-mono-950/70 backdrop-blur-sm grid place-items-center p-6"
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={SUPPORT_TITLE}
+        onClick={(e) => e.stopPropagation()}
+        className="relative w-full max-w-xs rounded-card border border-line bg-canvas shadow-card-lg p-4"
+      >
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          aria-label="Đóng"
+          className="absolute top-1 right-1 w-8 h-8 rounded-full flex items-center justify-center
+            text-ink-disabled hover:bg-ink-caption/10 hover:text-ink-primary transition-colors focus-ring"
+        >
+          <X size={16} aria-hidden="true" />
+        </button>
+        <h2 className="text-base font-bold text-ink-primary pr-8 mb-2">{SUPPORT_TITLE}</h2>
+        <SupportBody />
+      </div>
+    </div>
+  );
+}
+
+/** The footer entry. A button, because it opens something rather than going somewhere. */
+export function SupportLink({ className }: { className?: string }) {
+  return (
+    <button type="button" onClick={openSupport} className={className}>
+      Ủng hộ Cảm âm Tiêu Dao
+    </button>
+  );
+}

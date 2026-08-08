@@ -1,7 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { compose, composeByLine, sungText, units } from "./compose.ts";
+import { compose, composeByLine, phraseLyric, phraseNotes, sungText, units } from "./compose.ts";
+import type { Composed } from "./compose.ts";
 import { parseSections } from "./prompt.ts";
 import { tokenOf } from "./token.ts";
 import { renderPolished } from "./render.ts";
@@ -14,8 +15,8 @@ const doc = build(
   "test",
 );
 const us = units(doc);
-const total = (secs: { phrases: { notes: unknown[] }[] }[]) =>
-  secs.reduce((n, s) => n + s.phrases.reduce((m, p) => m + p.notes.length, 0), 0);
+const total = (secs: Composed[]) =>
+  secs.reduce((n, s) => n + s.phrases.reduce((m, p) => m + phraseNotes(p).length, 0), 0);
 
 test("a token is the note as a sheet prints it", () => {
   assert.equal(tokenOf({ digit: 5, octave: 0, rest: false }), "5");
@@ -71,8 +72,8 @@ test("a hallucinated word costs that word, not the alignment after it", () => {
   const withJunk = compose(us, parseSections("## A\n一 个 KHÔNG_CÓ 世 界\n凋 谢，"));
   assert.equal(total(good), total(withJunk));
   assert.equal(
-    withJunk[withJunk.length - 1].phrases.map((p) => p.lyric).join("|"),
-    good[good.length - 1].phrases.map((p) => p.lyric).join("|"),
+    withJunk[withJunk.length - 1].phrases.map(phraseLyric).join("|"),
+    good[good.length - 1].phrases.map(phraseLyric).join("|"),
     "the invented word is dropped and the real ones stay put",
   );
 });
@@ -80,8 +81,8 @@ test("a hallucinated word costs that word, not the alignment after it", () => {
 test("leading instrumental notes become their own section", () => {
   const out = compose(us, parseSections("## Lời 1\n一 个 世 界 凋 谢，"));
   assert.equal(out[0].title, "Dạo đầu");
-  assert.ok(out[0].phrases[0].notes.length > 0);
-  assert.equal(out[0].phrases[0].lyric, "");
+  assert.ok(phraseNotes(out[0].phrases[0]).length > 0);
+  assert.equal(phraseLyric(out[0].phrases[0]), "");
 });
 
 test("the same phrasing renders differently under each fingering, and never disagrees with itself", () => {
@@ -90,7 +91,11 @@ test("the same phrasing renders differently under each fingering, and never disa
     model: "test",
     sections: composed.map((c) => ({
       title: c.title,
-      lines: c.phrases.map((p) => ({ tokens: p.notes.map(tokenOf), lyric: p.lyric })),
+      lines: c.phrases.map((p) => ({
+        cells: p.units.flatMap((u) => u.notes.map((n, k) => ({
+          token: tokenOf(n), syllable: k === 0 ? u.syllable : "",
+        }))),
+      })),
     })),
   };
   const ids = Object.keys(doc.mappings);
