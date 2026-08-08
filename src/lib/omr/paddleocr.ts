@@ -55,7 +55,12 @@ const DET_NAME = "ch_PP-OCRv4_det_infer.onnx";
 const REC_H = 48, REC_MAXW = 320, REC_MAXW_LONG = 2048;
 // Long strips are padded up to a multiple of this, so ORT sees a handful of input shapes
 // instead of one per strip.
-const STRIP_BUCKET = Number(process.env.OMR_STRIP_BUCKET ?? 128);
+//
+// 1 = no padding, which is what jpeditor does. Bucketing to 128 was measured at ~130 -> ~16
+// input shapes with NO effect on peak RSS or speed, and it costs accuracy: the zero padding is
+// extra input the CTC has to decode, and on input_4 it swallowed the flat in the `1=bE` header,
+// reading `1=E` - a wrong key for the whole song. Do not raise this without re-checking keys.
+const STRIP_BUCKET = Number(process.env.OMR_STRIP_BUCKET ?? 1);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _ort: any = null;

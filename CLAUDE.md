@@ -162,71 +162,79 @@ The lesson worth keeping: every wrong hypothesis was tested with Windows RSS, wh
 **working set** and read 10-18GB for work the VM does in 623MB. Measure this on the target host.
 
 ```bash
-node scripts/bench-free.ts    # accuracy vs ground truth + peak RSS. Run after ANY omr/ change.
-node scripts/bench-omr.ts     # OUR reading vs jpeditor's, on test/input_N + test/output_N.txt
-node scripts/mem-profile.ts   # per-phase memory timeline, live-printed so an OOM kill keeps it
+node scripts/bench-free.ts      # accuracy vs ground truth + peak RSS. Run after ANY omr/ change.
+node scripts/bench-jpeditor.ts  # OUR RecognizedScore vs jpeditor's CURRENT one. The real metric.
+node scripts/bench-omr.ts       # legacy: vs test/output_N.txt, which is an OLD jpeditor build
+node scripts/dump-jpeditor.ts   # capture what jpeditor's own build reads (drives the two above)
+node scripts/mem-profile.ts     # per-phase memory timeline, live-printed so an OOM kill keeps it
 ```
 
-Baseline on the reference sheet: 100% pitch, 100% octave, 98.1% rhythm, 100% cảm âm, ~18s.
+Baseline on the reference sheet: 100% pitch, 100% octave, 98.1% rhythm, 100% cảm âm, ~7s.
 
 ### Agreement with jpeditor
 
-`test/` pairs each `input_N.<ext>` with `output_N.txt`, the `.jpwabc` jpeditor's browser build
-produced for it. Both sides are parsed by this repo's own reader and compared note for note, so
-the number is a real pitch-stream agreement rather than a text diff.
+**Measure against `test/jpeditor/input_N.json`, not `test/output_N.txt`.** The `.txt` files are
+`.jpwabc` from an OLDER jpeditor build which its own current build no longer reproduces - it
+scores 90.1% on input_2 and 80.5% on input_3 against them, and on input_2 its first error is the
+same `3' 2' 1'` -> `1' 1' 1'` we make. Scoring against them charges us for jpeditor's changes as
+if they were our defects, which is exactly what happened: it invented an "open lead" about the
+recogniser returning nothing for `3`, and sent four investigations after it.
 
-| image | size | ref | ours | agreement | key |
-|---|---|---|---|---|---|
-| input_0.png | 2480x3508 | 419 | 419 | **100.0%** | = |
-| input_1.jpg | 709x1039 | 278 | 278 | **100.0%** | = |
-| input_2.gif | 634x604 | 151 | 151 | 88.7% | = |
-| input_3.jpg | 382x523 | 87 | 63 | 54.0% | = |
-| input_4.jpg | - | 170 | 166 | 97.1% | **1=E vs 1=bE** |
-| input_5.jpg | - | 280 | 280 | 95.4% | = |
+`test/jpeditor/input_N.json` is the `RecognizedScore` jpeditor's current build produces, captured
+by `scripts/dump-jpeditor.ts` (Playwright over jpeditor's `dist/`; its playwright and build are
+resolved from `JPEDITOR_DIR`, nothing is installed here). Both sides are `RecognizedScore`, so
+`bench-jpeditor.ts` compares the recogniser with nothing downstream in the way.
 
-**The open lead: the recogniser returns NOTHING for certain cells.**
-`scripts/digit-confusion.ts` and `scripts/dump-bad-cells.ts` narrow it down.
+| image | size | notes ref/ours | digits | +octave | +rhythm | key |
+|---|---|---|---|---|---|---|
+| input_0.png | 2480x3508 | 419/419 | **100%** | **100%** | **100%** | = |
+| input_1.jpg | 709x1039 | 278/278 | **100%** | **100%** | **100%** | = |
+| input_2.gif | 634x604 | 151/151 | **100%** | **100%** | **100%** | = |
+| input_3.jpg | 382x523 | 87/58 | rows 3 vs 4 | - | - | = |
+| input_4.jpg | 800x1241 | 170/170 | **100%** | **100%** | **100%** | = |
+| input_5.jpg | 888x1243 | 280/280 | **100%** | **100%** | **100%** | = |
 
-At the note level 26 of 30 substitutions read as `1`. At the CELL level the picture is
-different and more useful: the digit backend returns `0` for those cells, and `0` there means
-*the regex found no digit in the recogniser's output* - an empty read, not a zero. Counted over
-the set: `3` fails 17 times, far more than any other glyph, and `1` almost never fails.
+Five of six are now bit-for-bit what jpeditor reads. Two things had to be true for that, and both
+were **wrongly excluded** by the notes this section replaces:
 
-`test/debug/bad-*.png` shows the cells. They are about TEN PIXELS tall. A `3` at that size is a
-blob; a `1` is still a stroke. jpeditor reads the same cells correctly with the same model, so
-the difference is in how the 48px recogniser input is built from them, not in the model.
+- **The canvas crop patch WAS the cause**, not a 2-note curiosity. Cropping via `getImageData`
+  makes the resampling kernel clamp at the region edge, where `drawImage` with a source rect lets
+  it reach into the neighbouring pixels. On a 9x9 digit blown up to 48px that changes the
+  reading - it was mangling **every** cell (0 of 87 matched jpeditor's on input_3), and on input_4
+  it silently dropped a whole staff row. Fixed in `canvas.ts` by copying a 2px margin of real
+  neighbours and drawing the sub-rect out of that: peak RSS 417MB vs 385MB before and 18.2GB with
+  the patch off, and the readings now match. **Do not "simplify" that margin away.**
+- **`STRIP_BUCKET` was what lost input_4's flat**, not header parsing. Padding lyric/header strips
+  out to a multiple of 128 fed the CTC enough extra zeros to swallow the `b` in `1=bE`. Default is
+  now 1 (= jpeditor). Bucketing had already been measured as worth nothing.
 
 Hypotheses tested and REJECTED, so nobody re-runs them:
 
-- **The canvas crop patch.** `OMR_CANVAS_CROP=0` restores jpeditor's sampling (and the leak).
-  Worth 2 notes on input_2: 134 -> 136 of 151. Real, small, not the cause.
+- **Different ink.** The binary maps are byte-identical (IoU 100%) on inputs 1-5. input_0 is
+  99.9% - 367px of 469k - and it is the only image exceeding `MAX_W`, so that is downscale
+  resampling; all 419 digits still read identically. The two pipelines see the same ink.
+- **Transparency.** `toGray` ignores alpha, and the PDF path fills white for that reason, but no
+  test image has a single transparent or partial-alpha pixel.
+- **Vendored files drifting.** They have not. `diff` reports ~1200 changed lines in `jianpu.ts`
+  only because of CRLF; with `--strip-trailing-cr` it is 14 lines, all import paths. jpeditor's
+  `9f63b03` (narrow-block `3/5`->`1`) and `4e4a490` are already in our copy.
+- **`prepCell`'s `padTo`.** Dead code - never passed by either call site. Digit tensors were
+  always 320 wide, same as jpeditor.
+- **Resampling quality.** `low`, `medium` and the default are byte-identical under
+  @napi-rs/canvas; `high` is worse; `off` is far worse. `OMR_SMOOTHING` in `canvas.ts` sweeps it.
 - **Resolution.** `scripts/try-upscale.ts` enlarges before recognition. It makes input_2 WORSE
   (88.7% -> 84.8% at 2x) and moves input_3 around without fixing it.
-- **Resampling quality.** @napi-rs/canvas defaults `imageSmoothingQuality` to `low` where a
-  browser's `low` is bilinear, which looked like the whole answer. Forcing `high` is worse
-  everywhere: input_3 54.0 -> 40.2, input_5 95.4 -> 92.5, input_1 100 -> 99.3. The input is
-  already hard black and white, and blurring a thresholded stroke destroys it. Reverted.
 
-Next: compare our binary map against jpeditor's for input_2, pixel for pixel. Everything above
-assumes the two pipelines are looking at the same ink; that has not been checked.
-
-**Second lead: input_4 loses a flat**, reading `1=E` where the sheet says `1=bE`. That is
-header parsing, independent of the note stream.
-
-Two exact matches say the vendored pipeline is not broken in general - `diff` against
-jpeditor's `src/omr/` is import paths and the canvas shim, nothing else.
-
-On input_2 the note COUNT matches exactly and 17 digits read differently, so segmentation
-agrees and only the reading disagrees. input_3 is a 382px scan that jpeditor also fails
-(87 notes for a 151-note song); we are worse.
-
-Two hypotheses tested and REJECTED, so nobody re-runs them:
-
-- **The canvas crop patch.** `OMR_CANVAS_CROP=0` restores jpeditor's sampling (and the leak).
-  Worth 2 notes on input_2: 134 -> 136 of 151. Real, small, not the cause.
-- **Resolution.** `scripts/try-upscale.ts` enlarges before recognition. It makes input_2 WORSE
-  (88.7% -> 84.8% at 2x) and moves input_3 around without fixing it. Enlarging is not the
-  answer; decode.ts only shrinking is not the problem.
+**The one real gap is input_3**, a 382px scan whose glyphs are 4-8px tall. We find 3 staff rows
+where jpeditor finds 4, because `jianpu.ts` drops any row where >=50% of digits read `0`, an empty
+read counts as `0`, and that filter runs BEFORE the `rankDigits` pass that exists to repair
+exactly those cells. Two fixes were tried and REVERTED - keeping rows by barline count, and
+counting only hollow-ring `0`s as rests - because both resurrect the lyric rows that filter is
+there to kill (10-12 rows, 231-265 notes). The root cause is upstream: our 48x48 tensors differ
+from jpeditor's by ~0.15/255 almost everywhere (the 64->48 downscale inside `recognizeDigitCells`
+resamples differently), which is nothing on a clean sheet and decisive on a 6px blob. Note that
+jpeditor is also wrong here - 87 notes for a 151-note song, mostly `1`s - so matching it is worth
+little. Bit-matching Blink's resampler is the only real fix and has poor cost/benefit.
 
 ## Brand
 

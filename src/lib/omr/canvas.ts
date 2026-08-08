@@ -72,7 +72,21 @@ const nativeDrawImage = ctxProto.drawImage;
 const CROP_ENABLED = process.env.OMR_CANVAS_CROP !== "0";
 
 
+/**
+ * Resampling filter for scaled draws. Experimental knob, off by default.
+ *
+ * A digit cell is scaled up ~8x into the 64px recogniser input, so the filter, not the model,
+ * decides what a 6px glyph looks like. @napi-rs/canvas and a browser do not agree on what each
+ * quality name means.
+ */
+const SMOOTHING = process.env.OMR_SMOOTHING;
+
 ctxProto.drawImage = function (this: unknown, ...args: DrawArgs) {
+  if (SMOOTHING) {
+    const c = this as { imageSmoothingEnabled?: boolean; imageSmoothingQuality?: string };
+    if (SMOOTHING === "off") c.imageSmoothingEnabled = false;
+    else { c.imageSmoothingEnabled = true; c.imageSmoothingQuality = SMOOTHING; }
+  }
   const src = args[0] as { width?: number; height?: number; getContext?: unknown } | null;
   if (CROP_ENABLED && args.length === 9 && src && typeof src.getContext === "function") {
     const [, sx, sy, sw, sh, dx, dy, dw, dh] = args as [unknown, ...number[]];
@@ -81,10 +95,16 @@ ctxProto.drawImage = function (this: unknown, ...args: DrawArgs) {
     // edge semantics, and the callers that do it have already clamped), and only when the
     // source is big enough relative to the region for a snapshot to be the dominant cost.
     if (sw >= 1 && sh >= 1 && sx >= 0 && sy >= 0 && sx + sw <= W && sy + sh <= H && W * H > sw * sh * 4) {
-      const region = (src as unknown as Canvas).getContext("2d").getImageData(sx, sy, sw, sh);
-      const tmp = napiCreateCanvas(sw, sh);
+      // The copy carries a margin of real neighbouring pixels. Scaling a region out of a big
+      // source lets the resampling kernel reach past the region's edge; copying exactly sw x sh
+      // first makes it clamp instead, which on a 9x9 digit blown up to 48px changed the reading.
+      const M = Number(process.env.OMR_CROP_MARGIN ?? 2);
+      const mx = Math.min(M, sx), my = Math.min(M, sy);
+      const rw = sw + mx + Math.min(M, W - sx - sw), rh = sh + my + Math.min(M, H - sy - sh);
+      const region = (src as unknown as Canvas).getContext("2d").getImageData(sx - mx, sy - my, rw, rh);
+      const tmp = napiCreateCanvas(rw, rh);
       tmp.getContext("2d").putImageData(region, 0, 0);
-      return nativeDrawImage.call(this, tmp, 0, 0, sw, sh, dx, dy, dw, dh);
+      return nativeDrawImage.call(this, tmp, mx, my, sw, sh, dx, dy, dw, dh);
     }
   }
   return nativeDrawImage.apply(this, args);
